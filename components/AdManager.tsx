@@ -22,6 +22,7 @@ export const AdManager: React.FC = () => {
   const [showCloseButton, setShowCloseButton] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const location = useLocation();
@@ -134,6 +135,7 @@ export const AdManager: React.FC = () => {
       setCurrentVideoMediaIndex(0);
       setVideoCountdown(ad.timerDuration !== undefined ? ad.timerDuration : 5);
       setShowCloseButton(ad.showCloseAfterVideos <= 1 && (ad.timerDuration === 0 || !ad.timerDuration));
+      setIsVideoLoaded(false);
       setShowVideo(true);
       
       // Mark as shown
@@ -159,7 +161,7 @@ export const AdManager: React.FC = () => {
   // Video Timer logic
   useEffect(() => {
     let timer: any;
-    if (showVideo && activeVideoAd) {
+    if (showVideo && activeVideoAd && isVideoLoaded) {
       if (!showCloseButton) {
         const threshold = activeVideoAd.showCloseAfterVideos || 1;
         if (currentVideoMediaIndex + 1 >= threshold) {
@@ -180,11 +182,12 @@ export const AdManager: React.FC = () => {
       }
     }
     return () => clearInterval(timer);
-  }, [showVideo, activeVideoAd, videoCountdown, currentVideoMediaIndex, showCloseButton]);
+  }, [showVideo, activeVideoAd, videoCountdown, currentVideoMediaIndex, showCloseButton, isVideoLoaded]);
 
   const handleVideoEnded = () => {
     if (activeVideoAd && currentVideoMediaIndex < activeVideoAd.videos.length - 1) {
       setCurrentVideoMediaIndex(prev => prev + 1);
+      setIsVideoLoaded(false);
     } else {
        // All videos ended
        setShowCloseButton(true);
@@ -262,18 +265,33 @@ export const AdManager: React.FC = () => {
                 className="relative w-full bg-black flex items-center justify-center min-h-[200px]"
                 style={getRatioStyle(activeVideoAd.videos[currentVideoMediaIndex]?.ratio)}
               >
+                {!isVideoLoaded && (
+                   <div className="absolute inset-0 bg-zinc-900 animate-pulse flex items-center justify-center">
+                      <div className="w-10 h-10 border-4 border-zinc-700 border-t-zinc-500 rounded-full animate-spin"></div>
+                   </div>
+                )}
                 <video 
                   key={currentVideoMediaIndex} // Force remount on source change
                   ref={videoRef}
                   src={activeVideoAd.videos[currentVideoMediaIndex]?.url}
                   autoPlay
+                  muted={isMuted}
+                  onCanPlay={() => setIsVideoLoaded(true)}
                   playsInline
-                  className="w-full h-full object-contain"
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${isVideoLoaded ? "opacity-100" : "opacity-0"}`}
                   onEnded={handleVideoEnded}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                 />
                 
+                {/* Persistent Mute Button */}
+                <button 
+                  onClick={toggleMute} 
+                  className="absolute bottom-4 right-4 z-50 text-white bg-black/40 backdrop-blur-md p-2 rounded-full hover:bg-black/60 transition"
+                >
+                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+
                 {/* Custom Player Controls overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
                   <div className="flex items-center justify-center gap-6 mb-4">
@@ -284,9 +302,10 @@ export const AdManager: React.FC = () => {
                     <button onClick={() => skip(5)} className="text-white hover:text-[#1cdb5e] transition"><RotateCw className="w-8 h-8" /></button>
                   </div>
                   <div className="flex justify-between items-center">
-                     <button onClick={toggleMute} className="text-white hover:text-[#1cdb5e] transition">
-                       {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-                     </button>
+                     <div></div>
+
+
+
                      <div className="text-white text-xs font-bold bg-black/40 px-3 py-1 rounded-full">
                        {currentVideoMediaIndex + 1} / {activeVideoAd.videos.length}
                      </div>
