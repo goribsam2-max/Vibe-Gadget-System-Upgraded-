@@ -47,7 +47,7 @@ export const AdManager: React.FC = () => {
         const data = snap.data();
         let activeVideoAds = [];
         if (data.videoAds && data.videoAds.length > 0) {
-          activeVideoAds = data.videoAds.filter((a: any) => a.active && a.videos?.length > 0);
+          activeVideoAds = data.videoAds.filter((a: any) => a.active && a.videos?.length > 0).map((a: any, i: number) => ({...a, id: a.id || `video-${i}`}));
         } else if (data.videoAd && data.videoAd.active) {
           activeVideoAds = [{
             id: 'legacy-video',
@@ -60,7 +60,7 @@ export const AdManager: React.FC = () => {
         setVideoAds(activeVideoAds);
         
         if (data.photoAds && data.photoAds.length > 0) {
-          setPhotoAds(data.photoAds.filter((a: any) => a.active));
+          setPhotoAds(data.photoAds.filter((a: any) => a.active).map((a: any, i: number) => ({...a, id: a.id || `photo-${i}`})));
         }
       }
     };
