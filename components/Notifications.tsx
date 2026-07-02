@@ -151,51 +151,51 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       <GooeyToaster position="top-right" showProgress closeButton="top-right" />
       
       <Modal.Modal zIndex={200000} active={!!confirmModal} onClickOutside={() => { confirmModal?.onCancel?.(); setConfirmModal(null); }}>
-        <Modal.Body>
-          <Modal.Title>{confirmModal?.title}</Modal.Title>
-          <Modal.Subtitle>{confirmModal?.message}</Modal.Subtitle>
+        <Modal.Body className="bg-white dark:bg-zinc-900 border-none">
+          <Modal.Title className="text-zinc-900 dark:text-zinc-100">{confirmModal?.title}</Modal.Title>
+          <Modal.Subtitle className="text-zinc-500 dark:text-zinc-400">{confirmModal?.message}</Modal.Subtitle>
         </Modal.Body>
-        <Modal.Actions>
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
           <Modal.Action variant="unstyled" onClick={() => { confirmModal?.onCancel?.(); setConfirmModal(null); }}>
             {confirmModal?.cancelText || 'Cancel'}
           </Modal.Action>
-          <Modal.Action onClick={() => { confirmModal?.onConfirm(); setConfirmModal(null); }}>
+          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { confirmModal?.onConfirm(); setConfirmModal(null); }}>
             {confirmModal?.confirmText || 'Confirm'}
           </Modal.Action>
         </Modal.Actions>
       </Modal.Modal>
 
       <Modal.Modal zIndex={200000} active={!!alertModal} onClickOutside={() => { alertModal?.onClose?.(); setAlertModal(null); }}>
-        <Modal.Body>
-          <Modal.Title>{alertModal?.title}</Modal.Title>
-          <Modal.Subtitle>{alertModal?.message}</Modal.Subtitle>
+        <Modal.Body className="bg-white dark:bg-zinc-900 border-none">
+          <Modal.Title className="text-zinc-900 dark:text-zinc-100">{alertModal?.title}</Modal.Title>
+          <Modal.Subtitle className="text-zinc-500 dark:text-zinc-400">{alertModal?.message}</Modal.Subtitle>
         </Modal.Body>
-        <Modal.Actions>
-          <Modal.Action onClick={() => { alertModal?.onClose?.(); setAlertModal(null); }}>
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
+          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { alertModal?.onClose?.(); setAlertModal(null); }}>
             {alertModal?.buttonText || 'OK'}
           </Modal.Action>
         </Modal.Actions>
       </Modal.Modal>
 
       <Modal.Modal zIndex={200000} active={!!promptModal} onClickOutside={() => { promptModal?.onCancel?.(); setPromptModal(null); }}>
-        <Modal.Body>
-          <Modal.Title>{promptModal?.title}</Modal.Title>
-          <Modal.Subtitle>{promptModal?.message}</Modal.Subtitle>
+        <Modal.Body className="bg-white dark:bg-zinc-900 border-none">
+          <Modal.Title className="text-zinc-900 dark:text-zinc-100">{promptModal?.title}</Modal.Title>
+          <Modal.Subtitle className="text-zinc-500 dark:text-zinc-400">{promptModal?.message}</Modal.Subtitle>
           <div className="mt-4">
             <input
               type="text"
-              className="w-full px-4 py-2 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+              className="w-full px-4 py-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 dark:text-white outline-none focus:ring-2 focus:ring-zinc-500"
               placeholder={promptModal?.placeholder || "Enter reason..."}
               value={promptVal}
               onChange={(e) => setPromptVal(e.target.value)}
             />
           </div>
         </Modal.Body>
-        <Modal.Actions>
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
           <Modal.Action variant="unstyled" onClick={() => { promptModal?.onCancel?.(); setPromptModal(null); }}>
             {promptModal?.cancelText || 'Cancel'}
           </Modal.Action>
-          <Modal.Action onClick={() => { 
+          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { 
             if (promptModal?.required && !promptVal.trim()) return notify("Please enter a value", "error");
             promptModal?.onConfirm(promptVal); 
             setPromptModal(null); 

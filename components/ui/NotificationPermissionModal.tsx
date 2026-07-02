@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from './dialog';
-import { Button } from './button';
 import { auth } from '../../firebase';
 import { useNotify } from '../Notifications';
 import { subscribeToWebPush } from '../../lib/push';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function NotificationPermissionModal() {
   const [open, setOpen] = useState(false);
@@ -66,50 +65,39 @@ export function NotificationPermissionModal() {
     setOpen(false);
   };
 
-  if (!open) return null;
-
   return (
-    <Dialog open={open} onOpenChange={(val) => {
-      if (!val) handleDismiss();
-      setOpen(val);
-    }}>
-      <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-900 border-none rounded-[24px] shadow-2xl p-0 overflow-hidden">
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-8 flex flex-col items-center text-center relative">
-          <button 
-             onClick={handleDismiss} 
-             className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors backdrop-blur-md"
-          >
-             <X size={16} />
-          </button>
-          
-          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-6 shadow-indigo-900/20">
-            <Bell className="w-8 h-8 text-indigo-600" />
+    <AnimatePresence>
+      {open && (
+        <motion.div 
+          initial={{ y: -100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="fixed top-4 left-4 right-4 md:left-auto md:right-4 md:w-[380px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-[100000] p-4 flex gap-4 overflow-hidden"
+        >
+          <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+            <Bell className="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
           </div>
-          
-          <DialogTitle className="text-2xl font-bold text-white mb-2 tracking-tight">Stay updated</DialogTitle>
-          <DialogDescription className="text-white/80 font-medium max-w-[280px]">
-            Enable notifications to receive updates about your orders, exclusive discounts, and mystery box drops!
-          </DialogDescription>
-        </div>
-        
-        <div className="p-6 bg-white dark:bg-zinc-900 flex flex-col gap-3">
-          <Button 
-            onClick={handleAllow} 
-            size="lg" 
-            className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-base py-6 shadow-md shadow-indigo-600/20"
-          >
-            Allow Notifications
-          </Button>
-          <Button 
-            onClick={handleDismiss} 
-            variant="ghost" 
-            size="lg" 
-            className="w-full rounded-2xl font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-          >
-            Not Now
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          <div className="flex-1">
+             <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm mb-1">Enable Notifications</h3>
+             <p className="text-zinc-500 text-xs mb-3 leading-snug">Get updates about your orders and exclusive discounts directly on your device.</p>
+             <div className="flex gap-2">
+                <button 
+                  onClick={handleDismiss}
+                  className="flex-1 py-2 rounded-[15px] border border-zinc-200 dark:border-zinc-700 text-zinc-500 font-bold text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center text-center"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleAllow}
+                  className="flex-1 py-2 rounded-[15px] bg-black dark:bg-white text-white dark:text-black font-bold text-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center justify-center text-center"
+                >
+                  Allow
+                </button>
+             </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

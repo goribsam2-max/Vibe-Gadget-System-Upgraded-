@@ -392,25 +392,29 @@ export const InstallPwaGuide: React.FC = () => {
                 );
             case 'style1':
             default:
-                // Default Compact Mobile Card
+                // Default Top In-Browser Popup
                 return (
                     <motion.div 
-                        initial={{ opacity: 0, y: 50 }}
+                        initial={{ opacity: 0, y: -50 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 50 }}
-                        className="fixed bottom-[80px] md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-sm bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-zinc-100 dark:border-zinc-700 p-4 z-[100005]"
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="fixed top-4 left-4 right-4 md:left-auto md:right-4 md:w-[380px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-[100005] p-4 flex gap-4 overflow-hidden"
                     >
-                        <button onClick={handleDismiss} className="absolute top-2 right-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1">
-                            <X size={16} />
-                        </button>
-                        <div className="flex items-center gap-4">
-                            <div className="shrink-0 flex flex-col items-center justify-center">
-                                <AppIcon className="w-14 h-14 rounded-2xl mb-1 shadow-sm" />
-                            </div>
-                            <div className="flex-1 pr-4">
-                                <h4 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1 leading-tight">{getTitle()}</h4>
-                                <p className="text-[11px] text-zinc-500 mb-3 leading-snug">{getDescription()}</p>
-                                {renderInstallButton("bg-black dark:bg-white text-white dark:text-black text-xs px-4 py-2 rounded-lg font-bold flex items-center justify-center w-full")}
+                        <div className="shrink-0 flex flex-col items-center justify-center">
+                            <AppIcon className="w-10 h-10 rounded-full shadow-sm" />
+                        </div>
+                        <div className="flex-1">
+                            <h4 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1 text-sm leading-tight">{getTitle()}</h4>
+                            <p className="text-xs text-zinc-500 mb-3 leading-snug">{getDescription()}</p>
+                            <div className="flex gap-2">
+                                <button 
+                                  onClick={handleDismiss}
+                                  className="flex-1 py-2 rounded-[15px] border border-zinc-200 dark:border-zinc-700 text-zinc-500 font-bold text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center text-center"
+                                >
+                                  Cancel
+                                </button>
+                                {renderInstallButton("flex-1 py-2 rounded-[15px] bg-black dark:bg-white text-white dark:text-black font-bold text-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center justify-center text-center")}
                             </div>
                         </div>
                     </motion.div>

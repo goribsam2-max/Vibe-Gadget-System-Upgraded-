@@ -148,18 +148,23 @@ const ModalHeader = ({ children, sticky }: ModalHeaderProps) => (
 const ModalInset = ({ children }: { children: React.ReactNode }) => (
   <div className="-mx-6 p-6 border-b border-t border-accents-2 bg-accents-1">{children}</div>
 );
-const ModalTitle = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="mb-6 text-2xl font-semibold tracking-[-0.029375rem]">{children}</h2>
+const ModalTitle = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+  <h2 className={clsx("mb-6 text-2xl font-semibold tracking-[-0.029375rem]", className)}>{children}</h2>
 );
-const ModalSubtitle = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-base">{children}</p>
+const ModalSubtitle = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+  <p className={clsx("text-base", className)}>{children}</p>
 );
-const ModalActions = ({ children }: { children: React.ReactNode }) => (
-  <footer className="sticky bottom-0 p-4 flex justify-between shrink-0 bg-background-200 inset-0 border-t border-gray-alpha-400 rounded-b-xl">
+const ModalActions = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+  <footer className={clsx("sticky bottom-0 p-4 flex justify-between shrink-0 bg-background-200 inset-0 border-t border-gray-alpha-400 rounded-b-xl", className)}>
     {children}
   </footer>
 );
-const ModalAction = (props: ButtonProps) => <Button {...props}>{props.children}</Button>;
+const ModalAction = (props: ButtonProps) => {
+  if (props.variant === "unstyled") {
+     return <Button {...props} className={clsx("w-full border border-zinc-200 dark:border-zinc-700 rounded-[15px] py-4 flex items-center justify-center font-bold text-zinc-500", props.className)}>{props.children}</Button>;
+  }
+  return <Button {...props}>{props.children}</Button>;
+};
 
 export const Modal = {
   Modal: ModalModal,
