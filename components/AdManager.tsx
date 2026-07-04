@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { doc, getDoc, collection, getDocs, runTransaction } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { useNotify } from '../components/Notifications';
 import { X, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Info, ExternalLink, Sparkles, ShoppingBag } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 
@@ -21,7 +22,7 @@ export const AdManager: React.FC = () => {
   const [videoCountdown, setVideoCountdown] = useState(5);
   const [showCloseButton, setShowCloseButton] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isSponsoredExpanded, setIsSponsoredExpanded] = useState(false);
   
@@ -38,6 +39,45 @@ export const AdManager: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const pageViews = useRef(0);
+
+  const notify = useNotify();
+  const watchTimeAccumulated = useRef<number>(0);
+
+  const toSlug = (name: string) =>
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+  const loadShoppableProducts = async (ad: any) => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'products'));
+      const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      let matched: any[] = [];
+      
+      // 1. Match by shoppableProducts (either ID or slug)
+      if (ad.shoppableProducts && ad.shoppableProducts.length > 0) {
+        const targetSlugsOrIds = ad.shoppableProducts.map((s: string) => s.toLowerCase().trim());
+        matched = allProducts.filter((p: any) => {
+          const pSlug = p.slug || (p.name ? toSlug(p.name) : '');
+          return targetSlugsOrIds.includes(p.id.toLowerCase()) || targetSlugsOrIds.includes(pSlug.toLowerCase());
+        });
+      }
+      
+      // 2. If no explicit shoppableProducts but there is a targetCategory, show products from that category!
+      if (matched.length === 0 && ad.targetCategory) {
+        matched = allProducts.filter((p: any) => {
+          return p.category && p.category.toLowerCase().trim() === ad.targetCategory.toLowerCase().trim();
+        }).slice(0, 3); // Limit to top 3 products of that category
+      }
+      
+      setShoppableData(matched);
+    } catch (err) {
+      console.error("Error loading shoppable products:", err);
+      setShoppableData([]);
+    }
+  };
 
   // Photo Ad Carousel
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
@@ -222,21 +262,11 @@ export const AdManager: React.FC = () => {
       setIsSponsoredExpanded(false);
       setVideoProgress(0); // Reset video progress
       setShowVideo(true);
+      watchTimeAccumulated.current = 0; // Reset cumulative watch time
       
       recordAdAction(ad.id, 'video', 'impression');
 
-    if (ad.shoppableProducts && ad.shoppableProducts.length > 0) {
-      import('firebase/firestore').then(({ collection, query, where, getDocs }) => {
-         const { db } = require('../firebase');
-         const q = query(collection(db, 'products'), where('slug', 'in', ad.shoppableProducts));
-         getDocs(q).then(snap => {
-            setShoppableData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-         });
-      }).catch(console.error);
-    } else {
-      setShoppableData([]);
-    }
-
+      loadShoppableProducts(ad);
       
       // Mark as shown
       shownAds[ad.id] = now;
@@ -255,18 +285,7 @@ export const AdManager: React.FC = () => {
       
       recordAdAction(ad.id, 'photo', 'impression');
 
-    if (migratedAd.shoppableProducts && migratedAd.shoppableProducts.length > 0) {
-      import('firebase/firestore').then(({ collection, query, where, getDocs }) => {
-         const { db } = require('../firebase');
-         const q = query(collection(db, 'products'), where('slug', 'in', migratedAd.shoppableProducts));
-         getDocs(q).then(snap => {
-            setShoppableData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-         });
-      }).catch(console.error);
-    } else {
-      setShoppableData([]);
-    }
-
+      loadShoppableProducts(migratedAd);
       
       // Mark as shown
       shownAds[ad.id] = now;
@@ -327,6 +346,9 @@ export const AdManager: React.FC = () => {
   }, [showVideo, activeVideoAd, videoCountdown, currentVideoMediaIndex, showCloseButton, isVideoLoaded, isPlaying]);
 
   const handleVideoEnded = () => {
+    if (videoRef.current) {
+      watchTimeAccumulated.current += videoRef.current.currentTime;
+    }
     if (activeVideoAd && currentVideoMediaIndex < activeVideoAd.videos.length - 1) {
       setCurrentVideoMediaIndex(prev => prev + 1);
       setIsVideoLoaded(false);
@@ -340,26 +362,19 @@ export const AdManager: React.FC = () => {
        
        // Reward Watch-to-Earn
        if (activeVideoAd.rewardCoins && activeVideoAd.rewardCoins > 0 && activeVideoAd.timerDuration > 0) {
-          import('firebase/auth').then(({ getAuth }) => {
-            const user = getAuth().currentUser;
-            if (user && !activeVideoAd._rewardGiven) {
-              activeVideoAd._rewardGiven = true;
-              import('firebase/firestore').then(({ doc, runTransaction }) => {
-                 const { db } = require('../firebase');
-                 const userRef = doc(db, 'users', user.uid);
-                 runTransaction(db, async (t) => {
-                    const userSnap = await t.get(userRef);
-                    if (!userSnap.exists()) return;
-                    const currentCoins = userSnap.data().coins || 0;
-                    t.update(userRef, { coins: currentCoins + activeVideoAd.rewardCoins });
-                 }).then(() => {
-                    import('../components/Notifications').then(({ showNotification }) => {
-                       showNotification(`Earned ${activeVideoAd.rewardCoins} coins for watching!`, 'success');
-                    });
-                 }).catch(console.error);
-              });
-            }
-          });
+          const user = auth.currentUser;
+          if (user && !activeVideoAd._rewardGiven) {
+            activeVideoAd._rewardGiven = true;
+            const userRef = doc(db, 'users', user.uid);
+            runTransaction(db, async (t) => {
+               const userSnap = await t.get(userRef);
+               if (!userSnap.exists()) return;
+               const currentCoins = userSnap.data().coins || 0;
+               t.update(userRef, { coins: currentCoins + activeVideoAd.rewardCoins });
+            }).then(() => {
+               notify(`Earned ${activeVideoAd.rewardCoins} coins for watching!`, 'success');
+            }).catch(console.error);
+          }
        }
     }
   };
@@ -409,10 +424,15 @@ export const AdManager: React.FC = () => {
 
   const closeVideo = () => {
     if (!showCloseButton) return;
-    if (videoRef.current) videoRef.current.pause();
+    if (videoRef.current && activeVideoAd) {
+      videoRef.current.pause();
+      const totalSessionWatchTime = watchTimeAccumulated.current + videoRef.current.currentTime;
+      recordAdAction(activeVideoAd.id, 'video', 'close', totalSessionWatchTime);
+    }
     setShowVideo(false);
     setVideoProgress(0);
     setShowCenterFeedback(null);
+    watchTimeAccumulated.current = 0; // Reset
   };
 
   const closePhoto = () => {
@@ -495,6 +515,9 @@ export const AdManager: React.FC = () => {
                       <button
                         key={idx}
                         onClick={() => {
+                          if (videoRef.current) {
+                            watchTimeAccumulated.current += videoRef.current.currentTime;
+                          }
                           setCurrentVideoMediaIndex(idx);
                           setIsVideoLoaded(false);
                           setVideoProgress(0);
@@ -581,9 +604,19 @@ export const AdManager: React.FC = () => {
               {shoppableData.map(product => {
                 const imgUrl = product.images?.[0] || product.image || '';
                 const price = product.price || 0;
+                const name = product.name || product.title || '';
                 return (
                   <div key={product.id} className="w-20 h-24 bg-white/10 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border border-white/20 flex flex-col group relative items-center justify-between p-1">
-                    <img src={imgUrl} onClick={() => window.open('/product/' + product.slug, '_blank')} className="w-14 h-14 object-cover rounded-lg cursor-pointer" alt="" />
+                    <img 
+                      src={imgUrl} 
+                      onClick={() => {
+                        const pSlug = product.slug || (name ? toSlug(name) : '');
+                        const url = pSlug ? `/product/${pSlug}/${product.id}` : `/product/${product.id}`;
+                        window.open(url, '_blank');
+                      }} 
+                      className="w-14 h-14 object-cover rounded-lg cursor-pointer" 
+                      alt="" 
+                    />
                     <button onClick={(e) => {
                        e.stopPropagation();
                        if (!activeVideoAd?._conversionRecorded) {
@@ -598,18 +631,16 @@ export const AdManager: React.FC = () => {
                        } else {
                           cart.push({
                              id: product.id,
-                             title: product.title,
+                             title: name,
                              price: price,
                              image: imgUrl,
                              quantity: 1,
-                             slug: product.slug
+                             slug: product.slug || (name ? toSlug(name) : '')
                           });
                        }
                        localStorage.setItem("f_cart", JSON.stringify(cart));
                        window.dispatchEvent(new Event("update_cart"));
-                       import('../components/Notifications').then(({ showNotification }) => {
-                          showNotification('Added to cart!', 'success');
-                       });
+                       notify('Added to cart!', 'success');
                     }} className="w-full bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1 rounded-md transition-colors flex items-center justify-center gap-1">
                       <ShoppingBag className="w-3 h-3" /> Add
                     </button>
