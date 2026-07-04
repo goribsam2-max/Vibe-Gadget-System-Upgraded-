@@ -339,7 +339,31 @@ const ProductDetails: React.FC = () => {
   useEffect(() => {
     if (!product) return;
 
-    // We now use SEO component in render
+    // Behavioral Targeting: Track browsed categories
+    if (product.category) {
+      try {
+        const storedViews = localStorage.getItem("vibe_category_views");
+        let views: Record<string, number> = {};
+        if (storedViews) {
+          views = JSON.parse(storedViews);
+        }
+        views[product.category] = (views[product.category] || 0) + 1;
+        localStorage.setItem("vibe_category_views", JSON.stringify(views));
+
+        // Find the category with maximum views
+        let favorite = "";
+        let maxViews = -1;
+        for (const cat in views) {
+          if (views[cat] > maxViews) {
+            maxViews = views[cat];
+            favorite = cat;
+          }
+        }
+        if (favorite) {
+          localStorage.setItem("vibe_favorite_category", favorite);
+        }
+      } catch (e) {}
+    }
   }, [product, mysteryOffer]);
 
   useEffect(() => {

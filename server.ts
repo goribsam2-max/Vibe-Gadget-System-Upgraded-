@@ -29,7 +29,7 @@ try {
         credential: admin.credential.cert(serviceAccount),
       });
     } else {
-      admin.initializeApp();
+      console.warn("Firebase Admin: No credentials found. Admin SDK not initialized.");
     }
   }
 } catch (e) {
@@ -112,18 +112,29 @@ app.use(async (req, res, next) => {
       let { subscriptions = [] } = req.body;
       
       // Fetch web push subscriptions from firestore (Admin SDK bypasses rules)
+      let loadedFromFirestore = false;
       if (admin.apps?.length) {
          try {
              const subSnap = await admin.firestore().collection("web_push_subscriptions").get();
              const dbSubs = subSnap.docs.map((doc: any) => doc.data().subscription).filter(Boolean);
              subscriptions = [...subscriptions, ...dbSubs];
-             
-             // Deduplicate by endpoint
-             subscriptions = Array.from(new Map(subscriptions.map((s: any) => [s.endpoint, s])).values());
+             loadedFromFirestore = true;
          } catch(err) {
              console.error("Failed to fetch web_push_subscriptions", err);
          }
       }
+      
+      if (!loadedFromFirestore) {
+         const subsPath = path.resolve(process.cwd(), "web_push_subscriptions.json");
+         if (fs.existsSync(subsPath)) {
+             try {
+                 const subs = JSON.parse(fs.readFileSync(subsPath, "utf-8"));
+                 const fileSubs = Object.values(subs).map((s: any) => s.subscription).filter(Boolean);
+                 subscriptions = [...subscriptions, ...fileSubs];
+             } catch(e) {}
+         }
+      }
+      subscriptions = Array.from(new Map(subscriptions.map((s: any) => [s.endpoint, s])).values());
       
       let successCount = 0;
 
@@ -171,10 +182,10 @@ app.use(async (req, res, next) => {
                   await webpush.sendNotification(subscription, payload);
                   successCount++;
               } catch (error: any) {
-                  if (error.statusCode === 410 || error.statusCode === 404) {
+                  if (error.statusCode === 410 || error.statusCode === 404 || error.statusCode === 401 || error.statusCode === 400 || error.statusCode === 403) {
                      // Subscription expired or unsubscribed handled via frontend
                   } else {
-                     console.error('Web push error:', error);
+                     console.error('Web push error:', error.statusCode, error.body || error);
                   }
               }
           });
@@ -200,13 +211,28 @@ app.use(async (req, res, next) => {
         
         const endpointHash = Buffer.from(subscription.endpoint).toString('base64').replace(/[^a-zA-Z0-9]/g, '');
         
-        // Always save to web_push_subscriptions collection
+        let savedToFirestore = false;
         if (admin.apps?.length) {
-           await admin.firestore().collection("web_push_subscriptions").doc(endpointHash).set({
-               subscription,
-               uid: uid || null,
-               createdAt: admin.firestore.FieldValue.serverTimestamp()
-           });
+           try {
+              await admin.firestore().collection("web_push_subscriptions").doc(endpointHash).set({
+                  subscription,
+                  uid: uid || null,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+              savedToFirestore = true;
+           } catch(err) {
+              console.warn("Failed to save to Firestore web_push_subscriptions, using file fallback:", err.message || err);
+           }
+        }
+        
+        if (!savedToFirestore) {
+           const subsPath = path.resolve(process.cwd(), "web_push_subscriptions.json");
+           let subs: any = {};
+           if (fs.existsSync(subsPath)) {
+               try { subs = JSON.parse(fs.readFileSync(subsPath, "utf-8")); } catch(e) {}
+           }
+           subs[endpointHash] = { subscription, uid: uid || null, createdAt: Date.now() };
+           fs.writeFileSync(subsPath, JSON.stringify(subs, null, 2));
         }
 
         res.json({ success: true });
@@ -235,7 +261,11 @@ app.use(async (req, res, next) => {
         }
         res.status(500).json({ error: "VAPID keys not configured" });
     } catch(e) {
-        console.error("Welcome push error:", e);
+        if (e.statusCode && [400, 401, 403, 404, 410].includes(e.statusCode)) {
+            // ignore
+        } else {
+            console.error("Welcome push error:", e.statusCode, e.body || e);
+        }
         res.status(500).json({ error: "Failed" });
     }
   });
@@ -327,6 +357,151 @@ app.use(async (req, res, next) => {
       return res.json({ authEmail: null });
     } catch (e) {
       return res.json({ authEmail: null });
+    }
+  });
+
+  app.post("/api/ads/record", express.json(), async (req, res) => {
+    try {
+        const { adId, type, action, watchTime } = req.body;
+        
+        // 1. Save detailed analytics locally (always succeed)
+        try {
+          const analyticsPath = path.resolve(process.cwd(), "local_db/ads_analytics.json");
+          let analytics: any = {};
+          if (fs.existsSync(analyticsPath)) {
+            try { analytics = JSON.parse(fs.readFileSync(analyticsPath, "utf-8")); } catch(err) {}
+          }
+          
+          if (!analytics[adId]) {
+            analytics[adId] = {
+              id: adId,
+              type,
+              impressions: 0,
+              conversions: 0,
+              closes: 0,
+              totalWatchTime: 0,
+              closeSeconds: {}
+            };
+          }
+          
+          const adStat = analytics[adId];
+          adStat.type = type;
+          
+          if (action === 'impression') {
+            adStat.impressions = (adStat.impressions || 0) + 1;
+          } else if (action === 'conversion') {
+            adStat.conversions = (adStat.conversions || 0) + 1;
+          } else if (action === 'close' && watchTime !== undefined) {
+            adStat.closes = (adStat.closes || 0) + 1;
+            adStat.totalWatchTime = (adStat.totalWatchTime || 0) + watchTime;
+            const sec = Math.round(watchTime);
+            if (!adStat.closeSeconds) adStat.closeSeconds = {};
+            adStat.closeSeconds[sec] = (adStat.closeSeconds[sec] || 0) + 1;
+          }
+          
+          const localDir = path.resolve(process.cwd(), "local_db");
+          if (!fs.existsSync(localDir)) {
+            fs.mkdirSync(localDir, { recursive: true });
+          }
+          fs.writeFileSync(analyticsPath, JSON.stringify(analytics, null, 2), "utf-8");
+        } catch (err) {
+          console.error("Failed to write local analytics:", err);
+        }
+
+        // 2. Try real Firestore update if active (fail silently to preserve experience)
+        if (admin.apps?.length) {
+          try {
+            const db = getFirestore();
+            const adRef = db.collection("settings").doc("ads");
+            
+            await db.runTransaction(async (t) => {
+               const doc = await t.get(adRef);
+               if (!doc.exists) return;
+               const data = doc.data() || {};
+               const adsArray = type === 'video' ? (data.videoAds || []) : (data.photoAds || []);
+               
+               const index = adsArray.findIndex((a: any) => a.id === adId);
+               if (index !== -1) {
+                  if (action === 'impression') {
+                     adsArray[index].impressions = (adsArray[index].impressions || 0) + 1;
+                  } else if (action === 'conversion') {
+                     adsArray[index].conversions = (adsArray[index].conversions || 0) + 1;
+                  } else if (action === 'close' && watchTime !== undefined) {
+                     const currentTotalWatchTime = adsArray[index].totalWatchTime || 0;
+                     const closes = (adsArray[index].closes || 0) + 1;
+                     adsArray[index].totalWatchTime = currentTotalWatchTime + watchTime;
+                     adsArray[index].closes = closes;
+                  }
+                  if (type === 'video') {
+                     t.update(adRef, { videoAds: adsArray });
+                  } else {
+                     t.update(adRef, { photoAds: adsArray });
+                  }
+               }
+            });
+          } catch (firestoreErr: any) {
+            console.warn("Firestore analytics transaction omitted (using local fallback instead):", firestoreErr.message || firestoreErr);
+          }
+        }
+        
+        res.json({ success: true });
+    } catch(e) {
+        console.error("Ad recording top-level error:", e);
+        res.json({ success: true });
+    }
+  });
+
+  app.get("/api/ads/analytics", (req, res) => {
+    try {
+      const analyticsPath = path.resolve(process.cwd(), "local_db/ads_analytics.json");
+      let analytics = {};
+      if (fs.existsSync(analyticsPath)) {
+        try {
+          analytics = JSON.parse(fs.readFileSync(analyticsPath, "utf-8"));
+        } catch (err) {}
+      }
+      res.json(analytics);
+    } catch (e: any) {
+      res.status(500).json({ error: String(e.message || e) });
+    }
+  });
+
+  app.post("/api/ads/reward", express.json(), async (req, res) => {
+    try {
+        const { adId, uid, rewardCoins } = req.body;
+        if (!uid || !rewardCoins) return res.status(400).json({error: "Invalid request"});
+        
+        // Log locally for audit trail
+        try {
+          const logPath = path.resolve(process.cwd(), "local_db/reward_logs.json");
+          let logs: any[] = [];
+          if (fs.existsSync(logPath)) {
+            try { logs = JSON.parse(fs.readFileSync(logPath, "utf-8")); } catch(err) {}
+          }
+          logs.push({ uid, adId, rewardCoins, timestamp: Date.now() });
+          const localDir = path.resolve(process.cwd(), "local_db");
+          if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+          fs.writeFileSync(logPath, JSON.stringify(logs, null, 2), "utf-8");
+        } catch(e) {}
+
+        if (admin.apps?.length) {
+          try {
+            const db = getFirestore();
+            const userRef = db.collection("users").doc(uid);
+            
+            await db.runTransaction(async (t) => {
+               const doc = await t.get(userRef);
+               if (!doc.exists) return;
+               const currentCoins = doc.data().coins || 0;
+               t.update(userRef, { coins: currentCoins + rewardCoins });
+            });
+          } catch(e: any) {
+            console.warn("Firestore reward transaction skipped:", e.message || e);
+          }
+        }
+        res.json({ success: true, rewardCoins });
+    } catch(e) {
+       res.status(500).json({ error: "Failed" });
     }
   });
 

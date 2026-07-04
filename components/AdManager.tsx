@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { X, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Info, ExternalLink, Sparkles } from 'lucide-react';
+import { X, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Info, ExternalLink, Sparkles, ShoppingBag } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 
 export const AdManager: React.FC = () => {
@@ -26,6 +26,10 @@ export const AdManager: React.FC = () => {
   const [isSponsoredExpanded, setIsSponsoredExpanded] = useState(false);
   
   const [videoProgress, setVideoProgress] = useState(0);
+
+  const [userRegion, setUserRegion] = useState<string>('');
+  const [shoppableData, setShoppableData] = useState<any[]>([]);
+
   const [showCenterFeedback, setShowCenterFeedback] = useState<'play' | 'pause' | null>(null);
   const [feedbackKey, setFeedbackKey] = useState(0);
   const feedbackTimeoutRef = useRef<any>(null);
@@ -74,6 +78,25 @@ export const AdManager: React.FC = () => {
     fetchAds();
   }, []);
 
+  
+  useEffect(() => {
+    const fetchGeo = async () => {
+       const cached = sessionStorage.getItem('vibe_user_region');
+       if (cached) {
+         setUserRegion(cached);
+         return;
+       }
+       try {
+         const res = await fetch('https://ipapi.co/json/');
+         const data = await res.json();
+         const region = data.city || data.region || '';
+         setUserRegion(region);
+         sessionStorage.setItem('vibe_user_region', region);
+       } catch(e) {}
+    };
+    fetchGeo();
+  }, []);
+
   useEffect(() => {
     // Determine what to show on first load
     if (videoAds.length > 0 || photoAds.length > 0) {
@@ -113,6 +136,58 @@ export const AdManager: React.FC = () => {
     return () => clearTimeout(timer);
   }, [showVideo, showPhoto]);
 
+  const recordAdAction = async (adId: string, type: 'video' | 'photo', action: 'impression' | 'conversion' | 'close', watchTime?: number) => {
+    try {
+      await fetch('/api/ads/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adId, type, action, watchTime })
+      });
+    } catch (e) {}
+  };
+
+  const selectBestAd = (ads: any[]) => {
+    // Geo Filtering
+    let filteredAds = ads.filter(ad => {
+       if (ad.targetRegion && userRegion) {
+          return userRegion.toLowerCase().includes(ad.targetRegion.toLowerCase());
+       }
+       return true;
+    });
+    
+    if (filteredAds.length === 0) return null;
+    
+    // Category Targeting Boost
+    const favoriteCategory = localStorage.getItem('vibe_favorite_category') || '';
+    
+    // Epsilon-greedy A/B test selection: 20% random (explore), 80% best conversion rate (exploit)
+    const explore = Math.random() < 0.2;
+    if (explore) {
+      return filteredAds[Math.floor(Math.random() * filteredAds.length)];
+    }
+    
+    let bestAd = filteredAds[0];
+    let bestScore = -1;
+    
+    filteredAds.forEach(ad => {
+      const impressions = ad.impressions || 0;
+      const conversions = ad.conversions || 0;
+      let rate = impressions > 0 ? (conversions / impressions) : 0;
+      
+      // Boost rate if category matches
+      if (ad.targetCategory && favoriteCategory && ad.targetCategory.toLowerCase() === favoriteCategory.toLowerCase()) {
+         rate += 0.5; // Significant boost for behavioral match
+      }
+      
+      if (rate > bestScore) {
+        bestScore = rate;
+        bestAd = ad;
+      }
+    });
+    
+    return bestAd;
+  };
+
   const triggerRandomAd = () => {
     const now = Date.now();
     // Using 1-hour cooldown instead of 24-hours
@@ -137,7 +212,8 @@ export const AdManager: React.FC = () => {
     const selectedType = types[Math.floor(Math.random() * types.length)];
     
     if (selectedType === 'video') {
-      const ad = availableVideoAds[Math.floor(Math.random() * availableVideoAds.length)];
+      const ad = selectBestAd(availableVideoAds);
+      if (!ad) return;
       setActiveVideoAd(ad);
       setCurrentVideoMediaIndex(0);
       setVideoCountdown(ad.timerDuration !== undefined ? ad.timerDuration : 5);
@@ -147,11 +223,27 @@ export const AdManager: React.FC = () => {
       setVideoProgress(0); // Reset video progress
       setShowVideo(true);
       
+      recordAdAction(ad.id, 'video', 'impression');
+
+    if (ad.shoppableProducts && ad.shoppableProducts.length > 0) {
+      import('firebase/firestore').then(({ collection, query, where, getDocs }) => {
+         const { db } = require('../firebase');
+         const q = query(collection(db, 'products'), where('slug', 'in', ad.shoppableProducts));
+         getDocs(q).then(snap => {
+            setShoppableData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+         });
+      }).catch(console.error);
+    } else {
+      setShoppableData([]);
+    }
+
+      
       // Mark as shown
       shownAds[ad.id] = now;
       localStorage.setItem('vibe_shown_ads_1h', JSON.stringify(shownAds));
     } else {
-      const ad = availablePhotoAds[Math.floor(Math.random() * availablePhotoAds.length)];
+      const ad = selectBestAd(availablePhotoAds);
+      if (!ad) return;
       const migratedAd = {
         ...ad,
         images: ad.images || (ad.image ? [{ url: ad.image, ratio: '4/3' }] : [])
@@ -160,6 +252,21 @@ export const AdManager: React.FC = () => {
       setCurrentSlide(0);
       setShowPhoto(true);
       if (emblaApi) emblaApi.scrollTo(0);
+      
+      recordAdAction(ad.id, 'photo', 'impression');
+
+    if (migratedAd.shoppableProducts && migratedAd.shoppableProducts.length > 0) {
+      import('firebase/firestore').then(({ collection, query, where, getDocs }) => {
+         const { db } = require('../firebase');
+         const q = query(collection(db, 'products'), where('slug', 'in', migratedAd.shoppableProducts));
+         getDocs(q).then(snap => {
+            setShoppableData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+         });
+      }).catch(console.error);
+    } else {
+      setShoppableData([]);
+    }
+
       
       // Mark as shown
       shownAds[ad.id] = now;
@@ -170,7 +277,7 @@ export const AdManager: React.FC = () => {
   // Video Timer logic
   useEffect(() => {
     let timer: any;
-    if (showVideo && activeVideoAd && isVideoLoaded) {
+    if (showVideo && activeVideoAd && isVideoLoaded && isPlaying) {
       if (!showCloseButton) {
         const threshold = activeVideoAd.showCloseAfterVideos || 1;
         if (currentVideoMediaIndex + 1 >= threshold) {
@@ -191,7 +298,7 @@ export const AdManager: React.FC = () => {
       }
     }
     return () => clearInterval(timer);
-  }, [showVideo, activeVideoAd, videoCountdown, currentVideoMediaIndex, showCloseButton, isVideoLoaded]);
+  }, [showVideo, activeVideoAd, videoCountdown, currentVideoMediaIndex, showCloseButton, isVideoLoaded, isPlaying]);
 
   const handleVideoEnded = () => {
     if (activeVideoAd && currentVideoMediaIndex < activeVideoAd.videos.length - 1) {
@@ -200,6 +307,34 @@ export const AdManager: React.FC = () => {
     } else {
        // All videos ended
        setShowCloseButton(true);
+       if (activeVideoAd && !activeVideoAd._conversionRecorded) {
+         recordAdAction(activeVideoAd.id, 'video', 'conversion');
+         activeVideoAd._conversionRecorded = true;
+       }
+       
+       // Reward Watch-to-Earn
+       if (activeVideoAd.rewardCoins && activeVideoAd.rewardCoins > 0 && activeVideoAd.timerDuration > 0) {
+          import('firebase/auth').then(({ getAuth }) => {
+            const user = getAuth().currentUser;
+            if (user && !activeVideoAd._rewardGiven) {
+              activeVideoAd._rewardGiven = true;
+              import('firebase/firestore').then(({ doc, runTransaction }) => {
+                 const { db } = require('../firebase');
+                 const userRef = doc(db, 'users', user.uid);
+                 runTransaction(db, async (t) => {
+                    const userSnap = await t.get(userRef);
+                    if (!userSnap.exists()) return;
+                    const currentCoins = userSnap.data().coins || 0;
+                    t.update(userRef, { coins: currentCoins + activeVideoAd.rewardCoins });
+                 }).then(() => {
+                    import('../components/Notifications').then(({ showNotification }) => {
+                       showNotification(`Earned ${activeVideoAd.rewardCoins} coins for watching!`, 'success');
+                    });
+                 }).catch(console.error);
+              });
+            }
+          });
+       }
     }
   };
 
@@ -285,12 +420,9 @@ export const AdManager: React.FC = () => {
                       setIsSponsoredExpanded(!isSponsoredExpanded);
                     }}
                     layout
-                    className="bg-black/85 hover:bg-black/95 backdrop-blur-md text-white text-[11px] font-bold h-8 px-2.5 rounded-full flex items-center gap-2 shadow-lg border border-white/10 tracking-wider uppercase transition-colors"
+                    className="bg-black/85 hover:bg-black/95 backdrop-blur-md text-white text-[11px] font-bold h-8 px-2.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/10 tracking-wider uppercase transition-colors"
                   >
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
+                    <Info className="w-3.5 h-3.5" />
                     <AnimatePresence initial={false} mode="wait">
                       {isSponsoredExpanded && (
                         <motion.span
@@ -418,7 +550,49 @@ export const AdManager: React.FC = () => {
                 </button>
 
                 {/* Custom Player Controls overlay */}
-                <div className="player-controls absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-6 z-30">
+                {shoppableData.length > 0 && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50">
+              {shoppableData.map(product => {
+                const imgUrl = product.images?.[0] || product.image || '';
+                const price = product.price || 0;
+                return (
+                  <div key={product.id} className="w-20 h-24 bg-white/10 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border border-white/20 flex flex-col group relative items-center justify-between p-1">
+                    <img src={imgUrl} onClick={() => window.open('/product/' + product.slug, '_blank')} className="w-14 h-14 object-cover rounded-lg cursor-pointer" alt="" />
+                    <button onClick={(e) => {
+                       e.stopPropagation();
+                       if (!activeVideoAd?._conversionRecorded) {
+                          recordAdAction(activeVideoAd!.id, 'video', 'conversion');
+                          activeVideoAd!._conversionRecorded = true;
+                       }
+                       // Add to cart logic
+                       let cart = JSON.parse(localStorage.getItem("f_cart") || "[]");
+                       const existing = cart.find((i: any) => i.id === product.id);
+                       if (existing) {
+                          existing.quantity += 1;
+                       } else {
+                          cart.push({
+                             id: product.id,
+                             title: product.title,
+                             price: price,
+                             image: imgUrl,
+                             quantity: 1,
+                             slug: product.slug
+                          });
+                       }
+                       localStorage.setItem("f_cart", JSON.stringify(cart));
+                       window.dispatchEvent(new Event("update_cart"));
+                       import('../components/Notifications').then(({ showNotification }) => {
+                          showNotification('Added to cart!', 'success');
+                       });
+                    }} className="w-full bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1 rounded-md transition-colors flex items-center justify-center gap-1">
+                      <ShoppingBag className="w-3 h-3" /> Add
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="player-controls absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-6 z-30">
                   <div className="flex items-center justify-center gap-6 mb-4">
                     <button 
                       onClick={(e) => { e.stopPropagation(); skip(-5); }} 
@@ -521,6 +695,10 @@ export const AdManager: React.FC = () => {
                         <button 
                             onClick={() => {
                                 closePhoto();
+                                if (activePhotoAd && !activePhotoAd._conversionRecorded) {
+                                  recordAdAction(activePhotoAd.id, 'photo', 'conversion');
+                                  activePhotoAd._conversionRecorded = true;
+                                }
                                 if (activePhotoAd.buttonLink) {
                                   if (activePhotoAd.buttonLink.startsWith('http')) {
                                     window.open(activePhotoAd.buttonLink, '_blank');

@@ -155,15 +155,16 @@ const ModalSubtitle = ({ children, className }: { children: React.ReactNode, cla
   <p className={clsx("text-base text-zinc-500 dark:text-zinc-400", className)}>{children}</p>
 );
 const ModalActions = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-  <footer className={clsx("sticky bottom-0 p-4 flex justify-between items-center shrink-0 bg-white dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 rounded-b-xl gap-3", className)}>
+  <footer className={clsx("sticky bottom-0 p-4 flex flex-row items-center justify-between shrink-0 bg-white dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 rounded-b-xl gap-3", className)}>
     {children}
   </footer>
 );
 const ModalAction = (props: ButtonProps) => {
-  if (props.variant === "unstyled") {
-     return <Button {...props} className={clsx("w-auto px-5 py-2.5 h-11 text-xs rounded-xl font-bold bg-zinc-100 dark:bg-zinc-800 border-none text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-95 transition-all flex items-center justify-center shrink-0", props.className)}>{props.children}</Button>;
+  const { variant, className, ...rest } = props;
+  if (variant === "unstyled") {
+     return <Button {...rest} variant="styled" className={clsx("w-auto px-6 py-2.5 h-11 text-[13px] rounded-xl font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-95 transition-all flex items-center justify-center shrink-0 border-none", className)}>{props.children}</Button>;
   }
-  return <Button {...props} className={clsx("flex-1 h-11 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs rounded-xl hover:opacity-90 active:scale-95 transition-all flex items-center justify-center border-none", props.className)}>{props.children}</Button>;
+  return <Button {...rest} variant="styled" className={clsx("flex-1 h-11 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-[13px] rounded-xl hover:opacity-90 active:scale-95 transition-all flex items-center justify-center border-none", className)}>{props.children}</Button>;
 };
 
 export const Modal = {

@@ -520,6 +520,41 @@ const AppContent: React.FC = () => {
         const unsubProfile = onSnapshot(doc(db, 'users', currentUser.uid), async (docSnap) => {
           if (docSnap.exists()) {
             setUserData(docSnap.data() as UserProfile);
+            
+            // If notifications are granted, ensure they are subscribed in backend
+            if ('Notification' in window && Notification.permission === 'granted') {
+               const subscribeToWebPush = async () => {
+                 try {
+                   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+                   const reg = await navigator.serviceWorker.ready;
+                   let subscription = await reg.pushManager.getSubscription();
+                   if (!subscription) {
+                     const res = await fetch('/api/web-push/public-key');
+                     const { publicKey } = await res.json();
+                     if (!publicKey) return;
+                     const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+                     const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+                     const rawData = window.atob(base64);
+                     const outputArray = new Uint8Array(rawData.length);
+                     for (let i = 0; i < rawData.length; ++i) {
+                       outputArray[i] = rawData.charCodeAt(i);
+                     }
+                     subscription = await reg.pushManager.subscribe({
+                       userVisibleOnly: true,
+                       applicationServerKey: outputArray
+                     });
+                   }
+                   if (subscription) {
+                     await fetch('/api/web-push/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ subscription, uid: currentUser.uid })
+                     });
+                   }
+                 } catch(e) { console.error('Web Push Init Error:', e); }
+               };
+               subscribeToWebPush();
+            }
           } else {
             // Auto-create document if missing to avoid orphaned auth users
             try {

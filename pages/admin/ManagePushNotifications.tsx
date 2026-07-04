@@ -89,7 +89,7 @@ const ManagePushNotifications: React.FC = () => {
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div>
          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Push Notifications</h1>
-         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Send Firebase Cloud Messaging notifications to all registered users.</p>
+         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Send web push notifications to all registered users.</p>
       </div>
 
       <Card>
