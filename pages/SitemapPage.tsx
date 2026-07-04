@@ -37,7 +37,7 @@ const SitemapPage: React.FC = () => {
         { label: "Refund Policy", path: "/refund-policy" },
         { label: "Shipping Policy", path: "/shipping-policy" },
         { label: "Disclaimer", path: "/disclaimer" },
-        { label: "Help Center", path: "/help-center" },
+        { label: "VG Helpline", path: "/help-center" },
       ],
     },
   ];

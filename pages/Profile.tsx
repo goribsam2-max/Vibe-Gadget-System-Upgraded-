@@ -372,7 +372,7 @@ const Profile: React.FC<{ userData: UserProfile | null }> = ({
                  {isAdmin && (
                     <NewMenuItem icon={<Shield className="w-5 h-5" />} label="Admin Panel" color="text-indigo-500" bg="bg-indigo-50 dark:bg-indigo-900/20" onClick={() => navigate('/admin')} />
                  )}
-                 <NewMenuItem icon="headset" label="Help Center" color="text-cyan-500" bg="bg-cyan-50 dark:bg-cyan-900/20" onClick={() => navigate('/help-center')} />
+                 <NewMenuItem icon="headset" label="VG Helpline" color="text-cyan-500" bg="bg-cyan-50 dark:bg-cyan-900/20" onClick={() => navigate('/help-center')} />
               </div>
           </div>
           

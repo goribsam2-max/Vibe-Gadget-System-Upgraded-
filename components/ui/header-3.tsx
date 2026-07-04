@@ -192,7 +192,7 @@ const productLinks: LinkItem[] = [
     icon: Star,
   },
   {
-    title: "Help Center",
+    title: "VG Helpline",
     href: "/help-center",
     description: "Get support and answers",
     icon: Headset,
