@@ -121,6 +121,7 @@ const LiveCoShopping = () => {
 
         pc.ontrack = (event) => {
           const remoteAudio = new Audio();
+          remoteAudio.autoplay = true;
           remoteAudio.srcObject = event.streams[0];
           remoteAudio.play().catch(e => console.error("Audio play error", e));
         };

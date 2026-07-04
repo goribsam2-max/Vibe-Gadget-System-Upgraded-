@@ -592,7 +592,7 @@ const ProductDetails: React.FC = () => {
     let cart = [];
     try { cart = JSON.parse(localStorage.getItem('f_cart') || '[]'); } catch(e) {}
     
-    const discountAmount = product.price * 0.05;
+    const discountAmount = product.price * 0.02;
     const groupPrice = product.price - discountAmount;
     
     cart.push({
@@ -604,7 +604,7 @@ const ProductDetails: React.FC = () => {
     
     localStorage.setItem('f_cart', JSON.stringify(cart));
     window.dispatchEvent(new Event("storage"));
-    notify('Joined Group Buy! Item added to cart at discounted price.', 'success');
+    notify('Group Buy complete! Item added to cart at discounted price.', 'success');
   };
 
   const changeImage = (index: number) => {
@@ -1054,7 +1054,7 @@ const ProductDetails: React.FC = () => {
               </div>
 
               {/* Group Buy Section */}
-              <LiveGroupBuy product={product} onJoinGroup={handleGroupBuy} />
+              <LiveGroupBuy product={product} onGroupFull={handleGroupBuy} />
 
               {/* Description */}
               <section className="bg-white dark:bg-zinc-900/50 rounded-2xl p-5 md:p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm mt-2">
