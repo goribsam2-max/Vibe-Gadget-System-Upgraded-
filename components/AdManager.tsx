@@ -21,7 +21,7 @@ export const AdManager: React.FC = () => {
   const [videoCountdown, setVideoCountdown] = useState(5);
   const [showCloseButton, setShowCloseButton] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isSponsoredExpanded, setIsSponsoredExpanded] = useState(false);
   
@@ -273,6 +273,32 @@ export const AdManager: React.FC = () => {
       localStorage.setItem('vibe_shown_ads_1h', JSON.stringify(shownAds));
     }
   };
+
+  // Explicit Autoplay Handler
+  useEffect(() => {
+    if (showVideo && videoRef.current && isVideoLoaded) {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+        }).catch(error => {
+          console.log("Autoplay prevented or interrupted:", error);
+          // If unmuted autoplay was blocked, automatically mute and play
+          if (!isMuted) {
+            setIsMuted(true);
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              videoRef.current.play().then(() => {
+                setIsPlaying(true);
+              }).catch(e => {
+                console.error("Muted autoplay fallback failed:", e);
+              });
+            }
+          }
+        });
+      }
+    }
+  }, [showVideo, currentVideoMediaIndex, isVideoLoaded]);
 
   // Video Timer logic
   useEffect(() => {
