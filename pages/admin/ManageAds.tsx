@@ -16,6 +16,7 @@ interface VideoAdConfig {
   videos: AdMedia[];
   timerDuration: number;
   showCloseAfterVideos: number;
+  isSponsored?: boolean;
 }
 
 interface PhotoAdConfig {
@@ -104,7 +105,8 @@ const ManageAds: React.FC = () => {
       active: true,
       videos: [{ url: '', ratio: '16/9' }],
       timerDuration: 5,
-      showCloseAfterVideos: 1
+      showCloseAfterVideos: 1,
+      isSponsored: false
     }]);
   };
 
@@ -229,6 +231,15 @@ const ManageAds: React.FC = () => {
                       <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${ad.active ? 'translate-x-4' : ''}`}></div>
                     </div>
                     <span className="ml-2 font-bold text-xs text-zinc-500">Active</span>
+                  </label>
+
+                 <label className="flex items-center cursor-pointer ml-4">
+                    <div className="relative">
+                      <input type="checkbox" className="sr-only" checked={ad.isSponsored || false} onChange={(e) => updateVideoAd(adIndex, "isSponsored", e.target.checked)} />
+                      <div className={`block w-10 h-6 rounded-full transition ${ad.isSponsored ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-700'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${ad.isSponsored ? 'translate-x-4' : ''}`}></div>
+                    </div>
+                    <span className="ml-2 font-bold text-xs text-zinc-500">Sponsored</span>
                   </label>
                   
                   <div className="flex items-center gap-2 ml-4">

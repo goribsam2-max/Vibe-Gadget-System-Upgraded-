@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { X, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from 'lucide-react';
+import { X, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Info, ExternalLink, Sparkles } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 
 export const AdManager: React.FC = () => {
@@ -23,6 +23,12 @@ export const AdManager: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const [isSponsoredExpanded, setIsSponsoredExpanded] = useState(false);
+  
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [showCenterFeedback, setShowCenterFeedback] = useState<'play' | 'pause' | null>(null);
+  const [feedbackKey, setFeedbackKey] = useState(0);
+  const feedbackTimeoutRef = useRef<any>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const location = useLocation();
@@ -77,7 +83,7 @@ export const AdManager: React.FC = () => {
         setTimeout(() => {
           triggerRandomAd();
           sessionStorage.setItem('vibe_ad_session', 'true');
-        }, 1500);
+        }, 700); // Trigger within the first second
       }
     }
   }, [videoAds, photoAds]);
@@ -109,7 +115,8 @@ export const AdManager: React.FC = () => {
 
   const triggerRandomAd = () => {
     const now = Date.now();
-    const shownAdsStr = localStorage.getItem('vibe_shown_ads_24h');
+    // Using 1-hour cooldown instead of 24-hours
+    const shownAdsStr = localStorage.getItem('vibe_shown_ads_1h');
     let shownAds: Record<string, number> = {};
     if (shownAdsStr) {
       try {
@@ -117,9 +124,9 @@ export const AdManager: React.FC = () => {
       } catch (e) {}
     }
 
-    // Filter out ads shown in the last 24 hours
-    const availableVideoAds = videoAds.filter(ad => !shownAds[ad.id] || now - shownAds[ad.id] > 24 * 60 * 60 * 1000);
-    const availablePhotoAds = photoAds.filter(ad => !shownAds[ad.id] || now - shownAds[ad.id] > 24 * 60 * 60 * 1000);
+    // Filter out ads shown in the last 1 hour (1 * 60 * 60 * 1000 ms)
+    const availableVideoAds = videoAds.filter(ad => !shownAds[ad.id] || now - shownAds[ad.id] > 1 * 60 * 60 * 1000);
+    const availablePhotoAds = photoAds.filter(ad => !shownAds[ad.id] || now - shownAds[ad.id] > 1 * 60 * 60 * 1000);
 
     const types = [];
     if (availableVideoAds.length > 0) types.push('video');
@@ -136,11 +143,13 @@ export const AdManager: React.FC = () => {
       setVideoCountdown(ad.timerDuration !== undefined ? ad.timerDuration : 5);
       setShowCloseButton(ad.showCloseAfterVideos <= 1 && (ad.timerDuration === 0 || !ad.timerDuration));
       setIsVideoLoaded(false);
+      setIsSponsoredExpanded(false);
+      setVideoProgress(0); // Reset video progress
       setShowVideo(true);
       
       // Mark as shown
       shownAds[ad.id] = now;
-      localStorage.setItem('vibe_shown_ads_24h', JSON.stringify(shownAds));
+      localStorage.setItem('vibe_shown_ads_1h', JSON.stringify(shownAds));
     } else {
       const ad = availablePhotoAds[Math.floor(Math.random() * availablePhotoAds.length)];
       const migratedAd = {
@@ -154,7 +163,7 @@ export const AdManager: React.FC = () => {
       
       // Mark as shown
       shownAds[ad.id] = now;
-      localStorage.setItem('vibe_shown_ads_24h', JSON.stringify(shownAds));
+      localStorage.setItem('vibe_shown_ads_1h', JSON.stringify(shownAds));
     }
   };
 
@@ -194,12 +203,34 @@ export const AdManager: React.FC = () => {
     }
   };
 
+  const triggerCenterFeedback = (type: 'play' | 'pause') => {
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    setShowCenterFeedback(type);
+    setFeedbackKey(prev => prev + 1);
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setShowCenterFeedback(null);
+    }, 600);
+  };
+
   const togglePlay = () => {
     if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
+      if (isPlaying) {
+        videoRef.current.pause();
+        triggerCenterFeedback('pause');
+      } else {
+        videoRef.current.play();
+        triggerCenterFeedback('play');
+      }
       setIsPlaying(!isPlaying);
     }
+  };
+
+  const handleVideoClick = (e: React.MouseEvent) => {
+    // If clicking on buttons or controls, don't trigger play/pause
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.player-controls')) {
+      return;
+    }
+    togglePlay();
   };
 
   const toggleMute = () => {
@@ -219,6 +250,8 @@ export const AdManager: React.FC = () => {
     if (!showCloseButton) return;
     if (videoRef.current) videoRef.current.pause();
     setShowVideo(false);
+    setVideoProgress(0);
+    setShowCenterFeedback(null);
   };
 
   const closePhoto = () => {
@@ -243,9 +276,41 @@ export const AdManager: React.FC = () => {
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-black rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 relative max-w-3xl w-full"
             >
+              {/* Header Info Area */}
+              {activeVideoAd.isSponsored && (
+                <div className="absolute top-4 left-4 z-50">
+                  <motion.button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSponsoredExpanded(!isSponsoredExpanded);
+                    }}
+                    layout
+                    className="bg-black/85 hover:bg-black/95 backdrop-blur-md text-white text-[11px] font-bold h-8 px-2.5 rounded-full flex items-center gap-2 shadow-lg border border-white/10 tracking-wider uppercase transition-colors"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <AnimatePresence initial={false} mode="wait">
+                      {isSponsoredExpanded && (
+                        <motion.span
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: "auto", opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="whitespace-nowrap overflow-hidden inline-block"
+                        >
+                          Sponsored
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                </div>
+              )}
+
               <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
                 {!showCloseButton ? (
-                   <div className="bg-black/50 backdrop-blur-md text-white text-xs font-bold px-4 py-2 rounded-full">
+                   <div className="bg-black/50 backdrop-blur-md text-white text-xs font-bold px-4 py-2 rounded-full border border-white/10">
                      {(activeVideoAd.showCloseAfterVideos > currentVideoMediaIndex + 1) ? 
                         `Video ${currentVideoMediaIndex + 1}/${activeVideoAd.videos.length}` 
                         : `Skip in ${videoCountdown}s`
@@ -254,22 +319,52 @@ export const AdManager: React.FC = () => {
                 ) : (
                   <button 
                     onClick={closeVideo}
-                    className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white p-2 rounded-full transition-all"
+                    className="bg-[#1cdb5e] hover:bg-[#18c253] text-black p-2.5 rounded-full transition-all shadow-[0_0_15px_rgba(28,219,94,0.4)] active:scale-95"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-5 h-5 font-bold" />
                   </button>
                 )}
               </div>
 
+              {/* Interactive Multi-clip Selector */}
+              {activeVideoAd.videos.length > 1 && (
+                <div className="absolute top-16 left-4 z-50 flex flex-col gap-2 max-w-[150px] sm:max-w-[200px]">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest bg-black/50 backdrop-blur-md px-2 py-1 rounded border border-white/5 w-fit">
+                    Select Part:
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {activeVideoAd.videos.map((vid: any, idx: number) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setCurrentVideoMediaIndex(idx);
+                          setIsVideoLoaded(false);
+                          setVideoProgress(0);
+                        }}
+                        className={`text-left text-xs font-bold px-3 py-1.5 rounded-lg border backdrop-blur-md transition-all ${
+                          idx === currentVideoMediaIndex
+                            ? 'bg-[#1cdb5e] text-black border-[#1cdb5e] shadow-[0_0_12px_rgba(28,219,94,0.3)] scale-[1.03]'
+                            : 'bg-black/60 text-white border-zinc-800 hover:bg-zinc-800/80 hover:border-zinc-700'
+                        }`}
+                      >
+                        {vid.label || `Clip ${idx + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div 
-                className="relative w-full bg-black flex items-center justify-center min-h-[200px]"
+                className="relative w-full bg-black flex items-center justify-center min-h-[220px] cursor-pointer group"
+                onClick={handleVideoClick}
                 style={getRatioStyle(activeVideoAd.videos[currentVideoMediaIndex]?.ratio)}
               >
                 {!isVideoLoaded && (
-                   <div className="absolute inset-0 bg-zinc-900 animate-pulse flex items-center justify-center">
-                      <div className="w-10 h-10 border-4 border-zinc-700 border-t-zinc-500 rounded-full animate-spin"></div>
+                   <div className="absolute inset-0 bg-zinc-950 flex items-center justify-center z-20">
+                      <div className="w-10 h-10 border-4 border-zinc-800 border-t-[#1cdb5e] rounded-full animate-spin"></div>
                    </div>
                 )}
+                
                 <video 
                   key={currentVideoMediaIndex} // Force remount on source change
                   ref={videoRef}
@@ -277,40 +372,90 @@ export const AdManager: React.FC = () => {
                   autoPlay
                   muted={isMuted}
                   onCanPlay={() => setIsVideoLoaded(true)}
+                  onTimeUpdate={() => {
+                    if (videoRef.current) {
+                      setVideoProgress((videoRef.current.currentTime / videoRef.current.duration) * 100 || 0);
+                    }
+                  }}
                   playsInline
                   className={`w-full h-full object-cover transition-opacity duration-300 ${isVideoLoaded ? "opacity-100" : "opacity-0"}`}
                   onEnded={handleVideoEnded}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                 />
+
+                {/* Centered Play/Pause Ripple Feedback */}
+                <AnimatePresence mode="popLayout">
+                  {showCenterFeedback && (
+                    <motion.div
+                      key={`${showCenterFeedback}-${feedbackKey}`}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: [0.5, 1.1, 1], opacity: [0, 1, 1] }}
+                      exit={{ scale: 1.3, opacity: 0 }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      className="absolute flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/10 p-5 rounded-full z-30 pointer-events-none"
+                    >
+                      {showCenterFeedback === 'play' ? (
+                        <Play className="w-8 h-8 text-[#1cdb5e]" fill="currentColor" />
+                      ) : (
+                        <Pause className="w-8 h-8 text-white" fill="currentColor" />
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+
                 
                 {/* Persistent Mute Button */}
                 <button 
-                  onClick={toggleMute} 
-                  className="absolute bottom-4 right-4 z-50 text-white bg-black/40 backdrop-blur-md p-2 rounded-full hover:bg-black/60 transition"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleMute();
+                  }}
+                  className="absolute bottom-4 right-4 z-50 text-white bg-black/60 backdrop-blur-md p-2.5 rounded-full hover:bg-black/80 transition border border-white/5 active:scale-90"
                 >
                   {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </button>
 
                 {/* Custom Player Controls overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
+                <div className="player-controls absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-6 z-30">
                   <div className="flex items-center justify-center gap-6 mb-4">
-                    <button onClick={() => skip(-5)} className="text-white hover:text-[#1cdb5e] transition"><RotateCcw className="w-8 h-8" /></button>
-                    <button onClick={togglePlay} className="text-white bg-white/20 p-4 rounded-full hover:bg-white/30 transition">
-                      {isPlaying ? <Pause className="w-8 h-8" fill="currentColor" /> : <Play className="w-8 h-8" fill="currentColor" />}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); skip(-5); }} 
+                      className="text-white hover:text-[#1cdb5e] transition active:scale-95"
+                    >
+                      <RotateCcw className="w-7 h-7" />
                     </button>
-                    <button onClick={() => skip(5)} className="text-white hover:text-[#1cdb5e] transition"><RotateCw className="w-8 h-8" /></button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); togglePlay(); }} 
+                      className="text-white bg-white/10 p-3 rounded-full hover:bg-white/20 transition active:scale-90 border border-white/5"
+                    >
+                      {isPlaying ? <Pause className="w-6 h-6" fill="currentColor" /> : <Play className="w-6 h-6" fill="currentColor" />}
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); skip(5); }} 
+                      className="text-white hover:text-[#1cdb5e] transition active:scale-95"
+                    >
+                      <RotateCw className="w-7 h-7" />
+                    </button>
                   </div>
                   <div className="flex justify-between items-center">
                      <div></div>
-
-
-
-                     <div className="text-white text-xs font-bold bg-black/40 px-3 py-1 rounded-full">
+                     <div className="text-white text-[11px] font-bold bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full border border-white/5">
                        {currentVideoMediaIndex + 1} / {activeVideoAd.videos.length}
                      </div>
                   </div>
                 </div>
+
+                {/* Dynamic Bottom Progress Seekbar */}
+                {isVideoLoaded && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800/40 overflow-hidden z-40">
+                    <div 
+                      className="h-full bg-gradient-to-r from-[#1cdb5e] to-emerald-400 transition-all duration-100 ease-linear shadow-[0_0_8px_#1cdb5e]"
+                      style={{ width: `${videoProgress}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

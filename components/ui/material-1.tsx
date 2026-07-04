@@ -25,7 +25,7 @@ export const Material = ({ type, children, className, ref, style, onClick }: Mat
   return (
     <div
       className={clsx(
-        "bg-background-100",
+        "bg-background-100 dark:bg-zinc-900",
         types[type],
         className
       )}

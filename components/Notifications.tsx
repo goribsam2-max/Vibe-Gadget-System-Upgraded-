@@ -155,11 +155,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           <Modal.Title className="text-zinc-900 dark:text-zinc-100">{confirmModal?.title}</Modal.Title>
           <Modal.Subtitle className="text-zinc-500 dark:text-zinc-400">{confirmModal?.message}</Modal.Subtitle>
         </Modal.Body>
-        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-none">
           <Modal.Action variant="unstyled" onClick={() => { confirmModal?.onCancel?.(); setConfirmModal(null); }}>
             {confirmModal?.cancelText || 'Cancel'}
           </Modal.Action>
-          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { confirmModal?.onConfirm(); setConfirmModal(null); }}>
+          <Modal.Action className="bg-black dark:bg-white text-white dark:text-black" onClick={() => { confirmModal?.onConfirm(); setConfirmModal(null); }}>
             {confirmModal?.confirmText || 'Confirm'}
           </Modal.Action>
         </Modal.Actions>
@@ -170,8 +170,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           <Modal.Title className="text-zinc-900 dark:text-zinc-100">{alertModal?.title}</Modal.Title>
           <Modal.Subtitle className="text-zinc-500 dark:text-zinc-400">{alertModal?.message}</Modal.Subtitle>
         </Modal.Body>
-        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
-          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { alertModal?.onClose?.(); setAlertModal(null); }}>
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-none">
+          <Modal.Action className="bg-black dark:bg-white text-white dark:text-black" onClick={() => { alertModal?.onClose?.(); setAlertModal(null); }}>
             {alertModal?.buttonText || 'OK'}
           </Modal.Action>
         </Modal.Actions>
@@ -191,11 +191,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             />
           </div>
         </Modal.Body>
-        <Modal.Actions className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 gap-3">
+        <Modal.Actions className="bg-white dark:bg-zinc-900 border-none">
           <Modal.Action variant="unstyled" onClick={() => { promptModal?.onCancel?.(); setPromptModal(null); }}>
             {promptModal?.cancelText || 'Cancel'}
           </Modal.Action>
-          <Modal.Action className="w-full rounded-[15px] py-4 bg-black dark:bg-white text-white dark:text-black font-bold hover:opacity-80" onClick={() => { 
+          <Modal.Action className="bg-black dark:bg-white text-white dark:text-black" onClick={() => { 
             if (promptModal?.required && !promptVal.trim()) return notify("Please enter a value", "error");
             promptModal?.onConfirm(promptVal); 
             setPromptModal(null); 

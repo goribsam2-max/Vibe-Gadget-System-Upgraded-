@@ -39,7 +39,7 @@ export const Drawer: React.FC<DrawerProps> = ({ height, onDismiss, show, childre
       <Material
         type="menu"
         className={clsx(
-          `fixed bottom-0 left-0 w-full max-h-[85vh] overflow-y-auto hide-scrollbar bg-background-100 shadow-lg transition-transform duration-300 rounded-t-[20px] rounded-b-none`,
+          `fixed bottom-0 left-0 w-full max-h-[85vh] overflow-y-auto hide-scrollbar bg-white dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 shadow-lg transition-transform duration-300 rounded-t-[20px] rounded-b-none`,
           !zIndex ? zIndexContent : "",
           show ? "translate-y-0" : "translate-y-full"
         )}
