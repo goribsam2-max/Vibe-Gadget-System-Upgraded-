@@ -213,6 +213,9 @@ const LiveCoShopping = () => {
     };
   }, []);
 
+  const isAllowedPage = location.pathname === "/" || location.pathname.startsWith("/product/");
+  if (!isActive && !isSession && !isAllowedPage) return null;
+
   if (!isActive && !isSession) {
     return (
       <div className="fixed bottom-24 right-4 z-[90]">

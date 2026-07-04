@@ -37,6 +37,7 @@ const ManageStaff: React.FC = () => {
     { id: "custom-sections", name: "UI builder" },
     { id: "chats", name: "Live Chats" },
     { id: "helpdesk", name: "Help Desk" },
+    { id: "vghelpline", name: "VG Helpline" },
     { id: "notifications", name: "Notifications" },
     { id: "config", name: "Config & Settings" }
   ];

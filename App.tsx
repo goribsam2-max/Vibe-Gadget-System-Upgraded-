@@ -293,6 +293,7 @@ import ManageCoupons from './pages/admin/ManageCoupons';
 import ManageHelpDesk from './pages/admin/ManageHelpDesk';
 import ManagePromoCodes from './pages/admin/ManagePromoCodes';
 import ManageChats from './pages/admin/ManageChats';
+import ManageVGHelpline from './pages/admin/ManageVGHelpline';
 import ManageStaff from './pages/admin/ManageStaff';
 import ManageStories from './pages/admin/ManageStories';
 import ManageWithdrawals from './pages/admin/ManageWithdrawals';
@@ -702,6 +703,7 @@ const AppContent: React.FC = () => {
                   <Route path="coupons" element={<PageWrapper><ManageCoupons /></PageWrapper>} />
                   <Route path="promo-codes" element={<PageWrapper><ManagePromoCodes /></PageWrapper>} />
                   <Route path="chats" element={<PageWrapper><ManageChats /></PageWrapper>} />
+              <Route path="vg-helpline" element={<ManageVGHelpline />} />
                   <Route path="helpdesk" element={<PageWrapper><ManageHelpDesk /></PageWrapper>} />
                   <Route path="staff" element={<PageWrapper><ManageStaff /></PageWrapper>} />
                   <Route path="riders" element={<PageWrapper><ManageRiders /></PageWrapper>} />

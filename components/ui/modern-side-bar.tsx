@@ -65,6 +65,7 @@ export function Sidebar({ className = "", children, userData }: SidebarProps) {
         { id: "stories", name: "Stories", icon: Layout, href: "/admin/stories", moduleId: "stories" },
         { id: "custom-sections", name: "UI builder", icon: FileText, href: "/admin/custom-sections", moduleId: "custom-sections" },
         { id: "chats", name: "Live Chats", icon: MessageSquare, href: "/admin/chats", moduleId: "chats" },
+        { id: "vg-helpline", name: "VG Helpline", icon: MessageSquare, href: "/admin/vg-helpline", moduleId: "vghelpline" },
         { id: "helpdesk", name: "Help Desk", icon: MessageSquare, href: "/admin/helpdesk", moduleId: "helpdesk" },
         { id: "notifications", name: "Notifications", icon: Bell, href: "/admin/notifications", moduleId: "notifications" },
         { id: "config", name: "Config", icon: Settings, href: "/admin/config", moduleId: "config" },

@@ -26,6 +26,9 @@ const HelpCenter: React.FC = () => {
   const [callType, setCallType] = useState<'audio' | 'video'>('audio');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [callDuration, setCallDuration] = useState(0);
+  const timerRef = useRef<any>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -34,15 +37,32 @@ const HelpCenter: React.FC = () => {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   
+  
+  useEffect(() => {
+    if (callState === 'active') {
+      timerRef.current = setInterval(() => setCallDuration(p => p + 1), 1000);
+    } else {
+      clearInterval(timerRef.current);
+      setCallDuration(0);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [callState]);
+
+  const formatCallDuration = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const myId = user?.uid || 'guest_' + Math.random().toString(36).substring(7);
   const chatId = `${myId}_${activeChat.id}`;
 
   useEffect(() => {
-    Notification.requestPermission();
+    if ('Notification' in window) Notification.requestPermission();
   }, []);
 
   const showNotification = (title: string, body: string) => {
-    if (Notification.permission === 'granted') {
+    if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body, icon: '/favicon.ico' });
     }
   };
@@ -208,7 +228,7 @@ const HelpCenter: React.FC = () => {
     }
   };
 
-  const setupWebRTC = (stream: MediaStream, type: 'audio' | 'video', isCaller: boolean) => {
+    const setupWebRTC = async (stream: MediaStream, type: 'audio' | 'video', isCaller: boolean) => {
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     pcRef.current = pc;
     
@@ -224,8 +244,50 @@ const HelpCenter: React.FC = () => {
       }
     };
     
-    // In a real scenario we would exchange SDP via Firestore here
-    // For this helpline simulation, we just show the local stream working
+    const callRef = doc(db, 'helpline_calls', chatId);
+    const candidateRef = collection(db, 'helpline_calls', chatId, 'candidates');
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        addDoc(candidateRef, {
+          candidate: event.candidate.toJSON(),
+          sender: myId
+        });
+      }
+    };
+
+    if (isCaller) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await updateDoc(callRef, { offer: { type: offer.type, sdp: offer.sdp } }, { merge: true });
+      
+      onSnapshot(callRef, (snap) => {
+        const data = snap.data();
+        if (data?.answer && !pc.currentRemoteDescription) {
+          pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        }
+      });
+    } else {
+      const snap = await getDoc(callRef);
+      const data = snap.data();
+      if (data?.offer) {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await updateDoc(callRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
+      }
+    }
+
+    onSnapshot(candidateRef, (snap) => {
+      snap.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          if (data.sender !== myId) {
+            pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+        }
+      });
+    });
   };
 
   const declineCall = async () => {
@@ -380,21 +442,26 @@ const HelpCenter: React.FC = () => {
             <AnimatePresence>
               {callState !== 'idle' && (
                 <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-black/95 z-50 flex flex-col"
-                >
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  exit={{ opacity: 0 }}
+  onClick={() => setShowControls(p => !p)}
+  className="absolute inset-0 bg-black/95 z-50 flex flex-col"
+>
                   {/* Call Header */}
-                  <div className="p-8 text-center mt-10">
-                    <img src={activeChat.avatar} alt="Avatar" className="w-24 h-24 rounded-full mx-auto mb-4 bg-zinc-800 border-4 border-zinc-700" />
-                    <h2 className="text-2xl font-bold text-white">{activeChat.name}</h2>
-                    <p className="text-zinc-400 mt-2">
-                      {callState === 'calling' && 'Calling...'}
-                      {callState === 'incoming' && 'Incoming Call...'}
-                      {callState === 'active' && '00:00'}
-                    </p>
-                  </div>
+<AnimatePresence>
+  {showControls && (
+    <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="p-8 text-center mt-10">
+      <img src={activeChat.avatar} alt="Avatar" className="w-24 h-24 rounded-full mx-auto mb-4 bg-zinc-800 border-4 border-zinc-700" />
+      <h2 className="text-2xl font-bold text-white">{activeChat.name}</h2>
+      <p className="text-zinc-400 mt-2 font-mono">
+        {callState === 'calling' && 'Calling...'}
+        {callState === 'incoming' && 'Incoming Call...'}
+        {callState === 'active' && formatCallDuration(callDuration)}
+      </p>
+    </motion.div>
+  )}
+</AnimatePresence>
 
                   {/* Video Area (if active video call) */}
                   {callState === 'active' && callType === 'video' && (
@@ -405,31 +472,35 @@ const HelpCenter: React.FC = () => {
                   )}
 
                   {/* Controls */}
-                  <div className="mt-auto p-12 flex justify-center gap-6">
-                    {callState === 'incoming' ? (
-                      <>
-                        <button onClick={declineCall} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-red-500/20">
-                          <PhoneOff className="w-6 h-6" />
-                        </button>
-                        <button onClick={acceptCall} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-green-500/20 animate-bounce">
-                          <Phone className="w-6 h-6" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={toggleMute} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-white text-black' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
-                          {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                        </button>
-                        <button onClick={() => setIsSpeaker(!isSpeaker)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isSpeaker ? 'bg-white text-black' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
-                          <Volume2 className="w-6 h-6" />
-                        </button>
-                        <button onClick={declineCall} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-red-500/20 ml-4">
-                          <PhoneOff className="w-7 h-7" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </motion.div>
+<AnimatePresence>
+  {showControls && (
+    <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} onClick={e => e.stopPropagation()} className="mt-auto p-12 flex justify-center gap-6">
+      {callState === 'incoming' ? (
+        <>
+          <button onClick={declineCall} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-red-500/20">
+            <PhoneOff className="w-6 h-6" />
+          </button>
+          <button onClick={acceptCall} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-green-500/20 animate-bounce">
+            <Phone className="w-6 h-6" />
+          </button>
+        </>
+      ) : (
+        <>
+          <button onClick={toggleMute} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-white text-black' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
+            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+          </button>
+          <button onClick={() => setIsSpeaker(!isSpeaker)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isSpeaker ? 'bg-white text-black' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
+            <Volume2 className="w-6 h-6" />
+          </button>
+          <button onClick={declineCall} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-red-500/20 ml-4">
+            <PhoneOff className="w-7 h-7" />
+          </button>
+        </>
+      )}
+    </motion.div>
+  )}
+</AnimatePresence>
+</motion.div>
               )}
             </AnimatePresence>
 
