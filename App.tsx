@@ -285,6 +285,7 @@ import ManageDeposits from './pages/admin/ManageDeposits';
 import BonusProducts from './pages/BonusProducts';
 import ShoppingCredits from './pages/ShoppingCredits';
 import BundleDeals from './pages/BundleDeals';
+import BundleBuilder from './pages/BundleBuilder';
 import MyCoupons from './pages/MyCoupons';
 import MyCoins from './pages/MyCoins';
 import GenericAdminMock from './pages/admin/GenericAdminMock';
@@ -633,6 +634,7 @@ const AppContent: React.FC = () => {
           <Route path="/bonus" element={<PageWrapper><BonusProducts /></PageWrapper>} />
           <Route path="/credits" element={<PageWrapper><ShoppingCredits /></PageWrapper>} />
           <Route path="/bundles" element={<PageWrapper><BundleDeals /></PageWrapper>} />
+          <Route path="/build-box" element={<PageWrapper><BundleBuilder /></PageWrapper>} />
           <Route path="/success" element={<PageWrapper><OrderSuccess /></PageWrapper>} />
           <Route path="/profile" element={<PageWrapper><Profile userData={userData} /></PageWrapper>} />
           <Route path="/region" element={<PageWrapper><RegionSelect /></PageWrapper>} />
@@ -727,6 +729,7 @@ import { LanguageProvider } from './components/LanguageContext';
 import { DynamicIsland } from './components/ui/dynamic-island';
 import { MobileGuard } from './components/MobileGuard';
 import { FloatingChat } from './components/FloatingChat';
+import LiveCoShopping from './components/LiveCoShopping';
 import { InstallPwaGuide } from './components/InstallPwaGuide';
 import { subscribeToWebPush } from './lib/push';
 import { NetworkStatus } from './components/NetworkStatus';
@@ -765,6 +768,7 @@ const App: React.FC = () => {
             <CartAbandonmentPopup />
             <NotificationPermissionModal />
             <AdManager />
+            <LiveCoShopping />
           </Router>
         </ToastProvider>
       </ThemeProvider>

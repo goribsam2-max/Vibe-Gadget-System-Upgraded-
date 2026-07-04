@@ -150,6 +150,12 @@ const adminLinks: LinkItem[] = [
 
 const productLinks: LinkItem[] = [
   {
+    title: "Build Box",
+    href: "/build-box",
+    description: "Create your custom tech bundle",
+    icon: Box,
+  },
+  {
     title: "Home",
     href: "/",
     description: "Discover new and trending gadgets",

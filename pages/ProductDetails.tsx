@@ -25,6 +25,7 @@ import {
 import Icon from "../components/Icon";
 import { triggerHaptic } from "../lib/haptics";
 import SEO from "../components/SEO";
+import { LiveGroupBuy } from "../components/LiveGroupBuy";
 import { PixelImage } from "../components/ui/PixelImage";
 import { getProductCoinReward } from "../lib/coinRewards";
 import { CustomSectionEmbed } from "../components/CustomSectionEmbed";
@@ -584,6 +585,28 @@ const ProductDetails: React.FC = () => {
     );
   };
 
+  const handleGroupBuy = () => {
+    triggerHaptic();
+    if (!product) return;
+    
+    let cart = [];
+    try { cart = JSON.parse(localStorage.getItem('f_cart') || '[]'); } catch(e) {}
+    
+    const discountAmount = product.price * 0.05;
+    const groupPrice = product.price - discountAmount;
+    
+    cart.push({
+       ...product,
+       price: groupPrice,
+       quantity: 1,
+       isGroupBuy: true
+    });
+    
+    localStorage.setItem('f_cart', JSON.stringify(cart));
+    window.dispatchEvent(new Event("storage"));
+    notify('Joined Group Buy! Item added to cart at discounted price.', 'success');
+  };
+
   const changeImage = (index: number) => {
     setDirection(index > activeImg ? 1 : -1);
     setActiveImg(index);
@@ -1029,6 +1052,9 @@ const ProductDetails: React.FC = () => {
                   leftLabel="100% Authentic"
                 />
               </div>
+
+              {/* Group Buy Section */}
+              <LiveGroupBuy product={product} onJoinGroup={handleGroupBuy} />
 
               {/* Description */}
               <section className="bg-white dark:bg-zinc-900/50 rounded-2xl p-5 md:p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm mt-2">
