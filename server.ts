@@ -106,6 +106,65 @@ app.use(async (req, res, next) => {
     res.json({ publicKey: vapidPublicKey });
   });
 
+  
+  app.post("/api/send-push-admin", express.json(), async (req, res) => {
+    try {
+      const { title, body, link } = req.body;
+      let subscriptions = [];
+      
+      if (admin.apps?.length) {
+         try {
+             // 1. Get all admin uids
+             const usersSnap = await admin.firestore().collection("users").where("role", "in", ["admin", "super_admin"]).get();
+             const adminUids = usersSnap.docs.map(doc => doc.id);
+             
+             if (adminUids.length > 0) {
+                 // 2. Get subscriptions for those uids
+                 // Since 'in' allows up to 10, we can do it if admins <= 10, but better to fetch all and filter in memory if many admins
+                 const subSnap = await admin.firestore().collection("web_push_subscriptions").get();
+                 const adminSubs = subSnap.docs
+                    .filter(doc => adminUids.includes(doc.data().uid))
+                    .map(doc => doc.data().subscription)
+                    .filter(Boolean);
+                 subscriptions = adminSubs;
+             }
+         } catch(err) {
+             console.error("Failed to fetch admin web_push_subscriptions", err);
+         }
+      }
+      
+      subscriptions = Array.from(new Map(subscriptions.map((s) => [s.endpoint, s])).values());
+      
+      if (subscriptions.length === 0) {
+        return res.status(200).json({ message: "No admin subscriptions found" });
+      }
+
+      let successCount = 0;
+      
+      const payload = JSON.stringify({
+         title: title,
+         body: body,
+         icon: "/favicon.png",
+         data: { url: link || "/admin/vg-helpline" }
+      });
+
+      const promises = subscriptions.map((sub) =>
+          webpush.sendNotification(sub, payload).catch((e) => {
+              console.error("Web push to admin failed:", e);
+              return null;
+          })
+      );
+      
+      const results = await Promise.all(promises);
+      successCount = results.filter(r => r !== null).length;
+
+      res.status(200).json({ success: true, count: successCount });
+    } catch (error) {
+      console.error("Error sending admin push:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/send-push-all", express.json(), async (req, res) => {
     try {
       const { title, body, image, link, fcmTokens = [] } = req.body;
@@ -239,6 +298,48 @@ app.use(async (req, res, next) => {
     } catch(e) {
         console.error("Save subscription error:", e);
         res.status(500).json({ error: "Failed" });
+    }
+  });
+
+  app.post("/api/send-push-user", express.json(), async (req, res) => {
+    try {
+      const { userId, title, body, link } = req.body;
+      if (!userId) return res.status(400).json({ error: "Missing userId" });
+      
+      let subscriptions = [];
+      if (admin.apps?.length) {
+         try {
+             const subSnap = await admin.firestore().collection("web_push_subscriptions").where("uid", "==", userId).get();
+             subscriptions = subSnap.docs.map(doc => doc.data().subscription).filter(Boolean);
+         } catch(err) {
+             console.error("Failed to fetch user web_push_subscriptions", err);
+         }
+      }
+      
+      if (subscriptions.length === 0) {
+        return res.status(200).json({ message: "No subscriptions found for user" });
+      }
+      
+      const payload = JSON.stringify({
+         title,
+         body,
+         icon: "/favicon.png",
+         data: { url: link || "/help-center" }
+      });
+
+      const promises = subscriptions.map((sub) =>
+          webpush.sendNotification(sub, payload).catch((e) => {
+              console.error("Web push to user failed:", e);
+              return null;
+          })
+      );
+      
+      const results = await Promise.all(promises);
+      const successCount = results.filter(r => r !== null).length;
+      res.json({ success: true, count: successCount });
+    } catch (error: any) {
+      console.error("Error sending user push:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 

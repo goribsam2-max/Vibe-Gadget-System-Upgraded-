@@ -1,5 +1,5 @@
 import { formatPrice } from "@/lib/utils";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../firebase';
@@ -8,6 +8,7 @@ import Icon from './Icon';
 
 import { useTheme } from './ThemeContext';
 import { Header } from './ui/header-3';
+import { PageLoadingContext } from '../App';
 
 
 const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -17,6 +18,7 @@ const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [cartTotal, setCartTotal] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isDark, toggleTheme } = useTheme();
+  const { isPageLoading } = useContext(PageLoadingContext);
 
   useEffect(() => {
     const updateSidebar = (e: any) => setSidebarOpen(e.detail);
@@ -63,8 +65,8 @@ const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const showNav = ['/', '/profile', '/search', '/notifications', '/orders', '/wishlist'].includes(location.pathname);
 
   return (
-    <div className="min-h-screen bg-transparent flex flex-col pt-14 md:pt-16">
-      <Header />
+    <div className={`min-h-screen bg-transparent flex flex-col ${(location.pathname === '/help-center' || isPageLoading) ? '' : 'pt-14 md:pt-16'}`}>
+      {location.pathname !== '/help-center' && !isPageLoading && <Header />}
       <div className="flex-1 flex w-full flex-col min-h-[calc(100vh-56px)]">
         {/* Main Content Area */}
         <div className={`transition-all duration-300 flex-1 w-full max-w-full ${sidebarOpen ? 'md:pl-64' : ''} lg:max-w-[calc(100vw-80px)] xl:max-w-none bg-transparent`}>
@@ -76,7 +78,7 @@ const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* Desktop Right Cart Sidebar */}
       <AnimatePresence>
-        {cartCount > 0 && (
+        {cartCount > 0 && location.pathname !== '/help-center' && !isPageLoading && (
           <motion.div 
             initial={{ x: 100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}

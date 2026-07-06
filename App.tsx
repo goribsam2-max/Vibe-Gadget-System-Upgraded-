@@ -1,6 +1,15 @@
+import { subscribeToWebPush } from './lib/push';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
+
+export const PageLoadingContext = createContext<{
+  isPageLoading: boolean;
+  setIsPageLoading: (val: boolean) => void;
+}>({
+  isPageLoading: true,
+  setIsPageLoading: () => {}
+});
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, updateDoc, collection, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
@@ -14,6 +23,7 @@ import OnboardingOffersModal from './components/OnboardingOffersModal';
 import { CartAbandonmentPopup } from './components/CartAbandonmentPopup';
 import { NotificationPermissionModal } from './components/ui/NotificationPermissionModal';
 import { AdManager } from './components/AdManager';
+import { GlobalCallReceiver } from './components/GlobalCallReceiver';
 
 const SEOProvider = () => {
   useEffect(() => {
@@ -417,10 +427,15 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const [loadingPath, setLoadingPath] = useState(location.pathname);
   const [loading, setLoading] = useState(true);
+  const { setIsPageLoading } = useContext(PageLoadingContext);
 
   if (loadingPath !== location.pathname) {
     setLoadingPath(location.pathname);
-    setLoading(true);
+    if (location.pathname === '/help-center') {
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
   }
 
   useEffect(() => {
@@ -428,11 +443,18 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [location.pathname]);
 
   useEffect(() => {
+     if (location.pathname === '/help-center') {
+        setLoading(false);
+        setIsPageLoading(false);
+        return;
+     }
+     setIsPageLoading(true);
      const timer = setTimeout(() => {
         setLoading(false);
+        setIsPageLoading(false);
      }, 2000);
      return () => clearTimeout(timer);
-  }, [location.pathname]);
+  }, [location.pathname, setIsPageLoading]);
 
   return (
     <ErrorBoundary>
@@ -449,6 +471,7 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const AppContent: React.FC = () => {
   const [userData, setUserData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isPageLoading } = useContext(PageLoadingContext);
   const location = useLocation();
   const navigate = useNavigate();
   const notify = useNotify();
@@ -525,37 +548,7 @@ const AppContent: React.FC = () => {
             
             // If notifications are granted, ensure they are subscribed in backend
             if ('Notification' in window && Notification.permission === 'granted') {
-               const subscribeToWebPush = async () => {
-                 try {
-                   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-                   const reg = await navigator.serviceWorker.ready;
-                   let subscription = await reg.pushManager.getSubscription();
-                   if (!subscription) {
-                     const res = await fetch('/api/web-push/public-key');
-                     const { publicKey } = await res.json();
-                     if (!publicKey) return;
-                     const padding = '='.repeat((4 - publicKey.length % 4) % 4);
-                     const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
-                     const rawData = window.atob(base64);
-                     const outputArray = new Uint8Array(rawData.length);
-                     for (let i = 0; i < rawData.length; ++i) {
-                       outputArray[i] = rawData.charCodeAt(i);
-                     }
-                     subscription = await reg.pushManager.subscribe({
-                       userVisibleOnly: true,
-                       applicationServerKey: outputArray
-                     });
-                   }
-                   if (subscription) {
-                     await fetch('/api/web-push/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ subscription, uid: currentUser.uid })
-                     });
-                   }
-                 } catch(e) { console.error('Web Push Init Error:', e); }
-               };
-               subscribeToWebPush();
+              subscribeToWebPush();
             }
           } else {
             // Auto-create document if missing to avoid orphaned auth users
@@ -703,7 +696,7 @@ const AppContent: React.FC = () => {
                   <Route path="coupons" element={<PageWrapper><ManageCoupons /></PageWrapper>} />
                   <Route path="promo-codes" element={<PageWrapper><ManagePromoCodes /></PageWrapper>} />
                   <Route path="chats" element={<PageWrapper><ManageChats /></PageWrapper>} />
-              <Route path="vg-helpline" element={<ManageVGHelpline />} />
+              <Route path="vg-helpline" element={<PageWrapper><ManageVGHelpline /></PageWrapper>} />
                   <Route path="helpdesk" element={<PageWrapper><ManageHelpDesk /></PageWrapper>} />
                   <Route path="staff" element={<PageWrapper><ManageStaff /></PageWrapper>} />
                   <Route path="riders" element={<PageWrapper><ManageRiders /></PageWrapper>} />
@@ -721,7 +714,7 @@ const AppContent: React.FC = () => {
           <Route path="*" element={<PageWrapper><NotFound /></PageWrapper>} />
         </Routes>
       </div>
-      {showNav && <BottomMenu />}
+      {showNav && !isPageLoading && <BottomMenu />}
     </DesktopLayout>
   );
 };
@@ -733,13 +726,14 @@ import { MobileGuard } from './components/MobileGuard';
 import { FloatingChat } from './components/FloatingChat';
 import LiveCoShopping from './components/LiveCoShopping';
 import { InstallPwaGuide } from './components/InstallPwaGuide';
-import { subscribeToWebPush } from './lib/push';
+
 import { NetworkStatus } from './components/NetworkStatus';
 import { PullToRefresh } from './components/PullToRefresh';
 import { IosSpinner } from './components/ui/ios-spinner';
 
 const App: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   useEffect(() => {
     // Auto subscribe if they already granted permission in the past
@@ -755,24 +749,31 @@ const App: React.FC = () => {
   return (
     <LanguageProvider>
       <ThemeProvider>
-        <ToastProvider>
-          <DynamicIsland />
-          <MigrationHelper />
-          <Router>
-            <PullToRefresh onRefresh={async () => {
-               await new Promise(r => setTimeout(r, 600));
-               window.location.reload();
-            }}>
-              <AppContent />
-            </PullToRefresh>
-            <NetworkStatus />
-            <OnboardingOffersModal />
-            <CartAbandonmentPopup />
-            <NotificationPermissionModal />
-            <AdManager />
-            <LiveCoShopping />
-          </Router>
-        </ToastProvider>
+        <PageLoadingContext.Provider value={{ isPageLoading, setIsPageLoading }}>
+          <ToastProvider>
+            <DynamicIsland />
+            <MigrationHelper />
+            <Router>
+              <PullToRefresh onRefresh={async () => {
+                 await new Promise(r => setTimeout(r, 600));
+                 window.location.reload();
+              }}>
+                <AppContent />
+              </PullToRefresh>
+              {!isPageLoading && (
+                <>
+                  <NetworkStatus />
+                  <OnboardingOffersModal />
+                  <CartAbandonmentPopup />
+                  <NotificationPermissionModal />
+                  <AdManager />
+                  <LiveCoShopping />
+                  <GlobalCallReceiver />
+                </>
+              )}
+            </Router>
+          </ToastProvider>
+        </PageLoadingContext.Provider>
       </ThemeProvider>
     </LanguageProvider>
   );

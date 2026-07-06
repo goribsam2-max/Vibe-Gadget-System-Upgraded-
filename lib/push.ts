@@ -54,6 +54,9 @@ export async function subscribeToWebPush() {
                  return { error: "Push manager is not available in your browser" };
             }
             
+            // Check if existing subscription matches current public key
+            const existingSub = await registration.pushManager.getSubscription();
+            
             const urlB64ToUint8Array = (base64String: string) => {
               const padding = '='.repeat((4 - base64String.length % 4) % 4);
               const base64 = (base64String + padding)
@@ -67,10 +70,36 @@ export async function subscribeToWebPush() {
               return outputArray;
             };
 
-            const subscription = await registration.pushManager.subscribe({
+            let subscription = existingSub;
+            
+            if (existingSub) {
+                const currentKey = existingSub.options.applicationServerKey;
+                const newKey = urlB64ToUint8Array(publicKey);
+                
+                // Compare keys (rough comparison by length or first few bytes)
+                // If they don't match, we must unsubscribe
+                let match = true;
+                if (currentKey && currentKey.byteLength === newKey.byteLength) {
+                    const currArr = new Uint8Array(currentKey);
+                    for (let i=0; i<5; i++) {
+                       if (currArr[i] !== newKey[i]) match = false;
+                    }
+                } else {
+                    match = false;
+                }
+                
+                if (!match) {
+                    await existingSub.unsubscribe();
+                    subscription = null;
+                }
+            }
+
+            if (!subscription) {
+               subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlB64ToUint8Array(publicKey)
             });
+            }
 
             const uid = auth.currentUser?.uid;
             

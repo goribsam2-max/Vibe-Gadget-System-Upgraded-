@@ -25,7 +25,8 @@ import {
   Bike,
   Bell,
   KeyRound,
-  AlertTriangle
+  AlertTriangle,
+  Phone
 } from "lucide-react";
 import {
   AreaChart,
@@ -231,6 +232,14 @@ const ADMIN_PIN_ITEMS: PinListItem[] = [
     icon: Bike,
     pinned: false,
     href: 'riders'
+  },
+  {
+    id: 'manage-vg-helpline',
+    name: 'Manage VGHelpline',
+    info: 'Helpline audio/video calls & chat',
+    icon: Phone,
+    pinned: true,
+    href: 'vg-helpline'
   }
 ];
 
@@ -249,6 +258,7 @@ const AdminDashboard: React.FC = () => {
         'manage-users': 'users',
         'manage-coupons': 'coupons',
         'manage-tickets': 'helpdesk',
+        'manage-vg-helpline': 'helpdesk',
         'manage-withdrawals': 'refunds',
         'manage-storefront': 'banners',
         'manage-stories': 'stories',
