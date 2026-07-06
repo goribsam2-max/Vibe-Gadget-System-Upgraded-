@@ -426,7 +426,7 @@ const PageSkeleton = ({ pathname }: { pathname: string }) => {
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const [loadingPath, setLoadingPath] = useState(location.pathname);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(location.pathname !== '/help-center');
   const { setIsPageLoading } = useContext(PageLoadingContext);
 
   if (loadingPath !== location.pathname) {
@@ -760,6 +760,7 @@ const App: React.FC = () => {
               }}>
                 <AppContent />
               </PullToRefresh>
+              <GlobalCallReceiver />
               {!isPageLoading && (
                 <>
                   <NetworkStatus />
@@ -768,7 +769,6 @@ const App: React.FC = () => {
                   <NotificationPermissionModal />
                   <AdManager />
                   <LiveCoShopping />
-                  <GlobalCallReceiver />
                 </>
               )}
             </Router>

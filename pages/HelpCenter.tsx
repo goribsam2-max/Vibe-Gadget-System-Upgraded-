@@ -349,7 +349,7 @@ const HelpCenter: React.FC = () => {
     return () => {
       unsub();
       unsubCall();
-      audioHelper.stop();
+      endCallLocal();
     };
   }, [chatId, activeChat]);
 
@@ -884,7 +884,7 @@ const HelpCenter: React.FC = () => {
                         <img src={activeChat.avatar} alt="Avatar" className="w-24 h-24 rounded-full mx-auto mb-4 bg-zinc-800 border-4 border-zinc-700" />
                         <h2 className="text-2xl font-bold text-white">{activeChat.name}</h2>
                         <p className="text-emerald-400 mt-2 font-mono text-sm tracking-wider uppercase">
-                          {callState === 'calling' && 'Calling User...'}
+                          {callState === 'calling' && 'Calling Support...'}
                           {callState === 'ringing' && 'Ringing...'}
                           {callState === 'incoming' && 'Incoming Call...'}
                           {callState === 'active' && formatCallDuration(callDuration)}

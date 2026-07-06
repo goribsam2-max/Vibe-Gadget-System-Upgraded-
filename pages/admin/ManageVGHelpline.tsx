@@ -78,6 +78,7 @@ const ManageVGHelpline: React.FC = () => {
   const [callType, setCallType] = useState<'audio' | 'video'>('audio');
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [activeCallCallerId, setActiveCallCallerId] = useState<string | null>(null);
+  const [isIncoming, setIsIncoming] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -191,7 +192,8 @@ const ManageVGHelpline: React.FC = () => {
 
         if (data.callerId !== 'admin') {
           // Incoming call from user
-          if (data.status === 'calling') {
+          if (data.status === 'calling' && currentCallState === 'idle') {
+            incomingCall = { id: d.id, ...data };
             // Admin is online! Symmetrically upgrade call to ringing instantly
             updateDoc(doc(db, 'helpline_calls', d.id), { status: 'ringing' }).catch(console.error);
           } else if (data.status === 'ringing' && currentCallState === 'idle') {
@@ -222,6 +224,7 @@ const ManageVGHelpline: React.FC = () => {
         setActiveCallCallerId(incomingCall.callerId);
         setCallType(incomingCall.type);
         setCallState('ringing');
+        setIsIncoming(true);
         callStartTimeRef.current = incomingCall.timestamp || Date.now();
         audioHelper.playRingtone();
       }
@@ -229,7 +232,7 @@ const ManageVGHelpline: React.FC = () => {
     
     return () => {
       unsubCalls();
-      audioHelper.stop();
+      endCallLocal();
     };
   }, []);
   
@@ -297,6 +300,7 @@ const ManageVGHelpline: React.FC = () => {
     setCallState('calling');
     setActiveCallId(selectedChat);
     setActiveCallCallerId('admin');
+    setIsIncoming(false);
     audioHelper.playCalling();
     const now = Date.now();
     callStartTimeRef.current = now;
@@ -343,13 +347,22 @@ const ManageVGHelpline: React.FC = () => {
     if (!activeCallId) return;
     audioHelper.stop();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+      const callRef = doc(db, 'helpline_calls', activeCallId);
+      const callSnap = await getDoc(callRef);
+      const callData = callSnap.data();
+      const actualType = callData?.type || 'audio';
+      setCallType(actualType);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: true, 
+        video: actualType === 'video' 
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       setCallState('active');
-      await setDoc(doc(db, 'helpline_calls', activeCallId), { status: 'accepted' }, { merge: true });
+      await setDoc(callRef, { status: 'accepted' }, { merge: true });
 
-      setupWebRTC(stream, callType, false, activeCallId);
+      setupWebRTC(stream, actualType, false, activeCallId);
     } catch (err) {
       console.error(err);
       declineCall();
@@ -574,6 +587,7 @@ const ManageVGHelpline: React.FC = () => {
     setCallState('idle');
     setActiveCallId(null);
     setActiveCallCallerId(null);
+    setIsIncoming(false);
     setIsMuted(false);
     setIsVideoOff(false);
   };
@@ -749,7 +763,7 @@ const ManageVGHelpline: React.FC = () => {
             onClick={() => setShowControls(p => !p)}
             className="fixed inset-0 z-[100] bg-zinc-950/95 text-white flex flex-col"
           >
-            {callState === 'ringing' && activeCallCallerId !== 'admin' ? (
+            {callState === 'ringing' && isIncoming ? (
               // Incoming call screen for admin
               <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="w-32 h-32 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8 animate-pulse relative">
