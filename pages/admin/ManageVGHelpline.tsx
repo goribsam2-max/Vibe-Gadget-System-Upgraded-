@@ -77,6 +77,7 @@ const ManageVGHelpline: React.FC = () => {
   const [callState, setCallState] = useState<'idle' | 'ringing' | 'calling' | 'active'>('idle');
   const [callType, setCallType] = useState<'audio' | 'video'>('audio');
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [activeCallCallerId, setActiveCallCallerId] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -91,6 +92,7 @@ const ManageVGHelpline: React.FC = () => {
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const candidateUnsubRef = useRef<(() => void) | null>(null);
+  const offerAnswerUnsubRef = useRef<(() => void) | null>(null);
 
   const callStateRef = useRef(callState);
   useEffect(() => {
@@ -217,6 +219,7 @@ const ManageVGHelpline: React.FC = () => {
       
       if (incomingCall && callStateRef.current === 'idle') {
         setActiveCallId(incomingCall.id);
+        setActiveCallCallerId(incomingCall.callerId);
         setCallType(incomingCall.type);
         setCallState('ringing');
         callStartTimeRef.current = incomingCall.timestamp || Date.now();
@@ -293,6 +296,7 @@ const ManageVGHelpline: React.FC = () => {
     setCallType(type);
     setCallState('calling');
     setActiveCallId(selectedChat);
+    setActiveCallCallerId('admin');
     audioHelper.playCalling();
     const now = Date.now();
     callStartTimeRef.current = now;
@@ -353,6 +357,16 @@ const ManageVGHelpline: React.FC = () => {
   };
 
   const setupWebRTC = async (stream: MediaStream, type: 'audio' | 'video', isCaller: boolean, callId: string) => {
+    // Clean up any stale subscription
+    if (offerAnswerUnsubRef.current) {
+      try { offerAnswerUnsubRef.current(); } catch (e) {}
+      offerAnswerUnsubRef.current = null;
+    }
+    if (candidateUnsubRef.current) {
+      try { candidateUnsubRef.current(); } catch (e) {}
+      candidateUnsubRef.current = null;
+    }
+
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     pcRef.current = pc;
     
@@ -437,6 +451,7 @@ const ManageVGHelpline: React.FC = () => {
           }
         }
       });
+      offerAnswerUnsubRef.current = unsubOfferAnswer;
     } else {
       const snap = await getDoc(callRef);
       const data = snap.data();
@@ -530,8 +545,26 @@ const ManageVGHelpline: React.FC = () => {
       candidateUnsubRef.current = null;
     }
 
+    // Unsubscribe from offer/answer snapshot
+    if (offerAnswerUnsubRef.current) {
+      try {
+        offerAnswerUnsubRef.current();
+      } catch (e) {}
+      offerAnswerUnsubRef.current = null;
+    }
+
     if (pcRef.current) {
       try {
+        pcRef.current.getSenders().forEach(sender => {
+          if (sender.track) {
+            try { sender.track.stop(); } catch (e) {}
+          }
+        });
+        pcRef.current.getReceivers().forEach(receiver => {
+          if (receiver.track) {
+            try { receiver.track.stop(); } catch (e) {}
+          }
+        });
         pcRef.current.close();
       } catch (e) {}
     }
@@ -540,6 +573,7 @@ const ManageVGHelpline: React.FC = () => {
     callStartTimeRef.current = Date.now(); // Ignore any late snapshots from the previous call
     setCallState('idle');
     setActiveCallId(null);
+    setActiveCallCallerId(null);
     setIsMuted(false);
     setIsVideoOff(false);
   };
@@ -715,7 +749,7 @@ const ManageVGHelpline: React.FC = () => {
             onClick={() => setShowControls(p => !p)}
             className="fixed inset-0 z-[100] bg-zinc-950/95 text-white flex flex-col"
           >
-            {callState === 'ringing' && activeCallId?.split('_')[0] === 'Guest' ? (
+            {callState === 'ringing' && activeCallCallerId !== 'admin' ? (
               // Incoming call screen for admin
               <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="w-32 h-32 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8 animate-pulse relative">

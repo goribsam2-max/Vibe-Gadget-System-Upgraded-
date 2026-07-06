@@ -122,7 +122,7 @@ export const GlobalCallReceiver: React.FC = () => {
         status: 'accepted'
       }).catch(console.error);
       
-      navigate(`/help-center?dept=${incomingCall.dept}&accept_call=true`);
+      navigate(`/help-center?dept=${incomingCall.dept}&accept_call=true&type=${incomingCall.type}`);
     }
     setIncomingCall(null);
   };

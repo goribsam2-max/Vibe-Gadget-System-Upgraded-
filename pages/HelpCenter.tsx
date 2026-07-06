@@ -82,14 +82,28 @@ const HelpCenter: React.FC = () => {
   const user = auth.currentUser;
   const notify = useNotify();
   const navigate = useNavigate();
-  const [activeChat, setActiveChat] = useState(DEPARTMENTS[0]);
+
+  const query = new URLSearchParams(window.location.search);
+  const acceptCallParam = query.get('accept_call') === 'true';
+  const deptParam = query.get('dept');
+  const typeParam = (query.get('type') || 'audio') as 'audio' | 'video';
+
+  const [activeChat, setActiveChat] = useState(() => {
+    if (deptParam) {
+      const targetDept = DEPARTMENTS.find(d => d.id === deptParam);
+      if (targetDept) return targetDept;
+    }
+    return DEPARTMENTS[0];
+  });
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMsg, setInputMsg] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   
   // Call states
-  const [callState, setCallState] = useState<'idle' | 'calling' | 'incoming' | 'active'>('idle');
-  const [callType, setCallType] = useState<'audio' | 'video'>('audio');
+  const [callState, setCallState] = useState<'idle' | 'calling' | 'incoming' | 'active'>(
+    acceptCallParam ? 'active' : 'idle'
+  );
+  const [callType, setCallType] = useState<'audio' | 'video'>(typeParam);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -103,6 +117,7 @@ const HelpCenter: React.FC = () => {
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const candidateUnsubRef = useRef<(() => void) | null>(null);
+  const offerAnswerUnsubRef = useRef<(() => void) | null>(null);
   
   const callStateRef = useRef(callState);
   useEffect(() => {
@@ -168,10 +183,6 @@ const HelpCenter: React.FC = () => {
   const myId = user?.uid || guestId;
   const chatId = `${myId}_${activeChat.id}`;
 
-  const query = new URLSearchParams(window.location.search);
-  const acceptCallParam = query.get('accept_call') === 'true';
-  const deptParam = query.get('dept');
-
   useEffect(() => {
     if (deptParam) {
       const targetDept = DEPARTMENTS.find(d => d.id === deptParam);
@@ -222,14 +233,12 @@ const HelpCenter: React.FC = () => {
   };
 
   useEffect(() => {
-    if (acceptCallParam && callState === 'idle') {
+    if (acceptCallParam) {
       const newUrl = window.location.pathname + (deptParam ? `?dept=${deptParam}` : '');
       window.history.replaceState({}, '', newUrl);
-      setTimeout(() => {
-        acceptCall();
-      }, 600);
+      acceptCall();
     }
-  }, [acceptCallParam, chatId, callState]);
+  }, [acceptCallParam, chatId]);
 
   useEffect(() => {
     const docRef = doc(db, 'helpline_chats', chatId);
@@ -479,14 +488,22 @@ const HelpCenter: React.FC = () => {
 
   const acceptCall = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+      const callRef = doc(db, 'helpline_calls', chatId);
+      const callSnap = await getDoc(callRef);
+      const callData = callSnap.data();
+      const actualType = callData?.type || 'audio';
+      setCallType(actualType);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: true, 
+        video: actualType === 'video' 
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       
-      const callRef = doc(db, 'helpline_calls', chatId);
       await setDoc(callRef, { status: 'active' }, { merge: true });
       setCallState('active');
-      setupWebRTC(stream, callType, false);
+      setupWebRTC(stream, actualType, false);
       
     } catch (err) {
       console.error(err);
@@ -496,6 +513,16 @@ const HelpCenter: React.FC = () => {
   };
 
   const setupWebRTC = async (stream: MediaStream, type: 'audio' | 'video', isCaller: boolean) => {
+    // Clean up any stale subscription
+    if (offerAnswerUnsubRef.current) {
+      try { offerAnswerUnsubRef.current(); } catch (e) {}
+      offerAnswerUnsubRef.current = null;
+    }
+    if (candidateUnsubRef.current) {
+      try { candidateUnsubRef.current(); } catch (e) {}
+      candidateUnsubRef.current = null;
+    }
+
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     pcRef.current = pc;
     
@@ -578,7 +605,7 @@ const HelpCenter: React.FC = () => {
           }
         }
       });
-      // Store any sub listeners if needed, or close pc handles it
+      offerAnswerUnsubRef.current = unsubOfferAnswer;
     } else {
       const snap = await getDoc(callRef);
       const data = snap.data();
@@ -669,8 +696,26 @@ const HelpCenter: React.FC = () => {
       candidateUnsubRef.current = null;
     }
 
+    // Unsubscribe from offer/answer snapshot
+    if (offerAnswerUnsubRef.current) {
+      try {
+        offerAnswerUnsubRef.current();
+      } catch (e) {}
+      offerAnswerUnsubRef.current = null;
+    }
+
     if (pcRef.current) {
       try {
+        pcRef.current.getSenders().forEach(sender => {
+          if (sender.track) {
+            try { sender.track.stop(); } catch (e) {}
+          }
+        });
+        pcRef.current.getReceivers().forEach(receiver => {
+          if (receiver.track) {
+            try { receiver.track.stop(); } catch (e) {}
+          }
+        });
         pcRef.current.close();
       } catch (e) {}
     }
